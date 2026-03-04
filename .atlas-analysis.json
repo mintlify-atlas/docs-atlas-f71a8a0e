@@ -1,0 +1,131 @@
+{
+  "projectType": "saas",
+  "projectName": "Dodo Supabase Subscription Starter",
+  "projectDescription": "A minimal Next.js + Supabase + Dodo Payments subscription starter kit for building SaaS applications.",
+  "theme": "almond",
+  "primaryColor": "#fbad0e",
+  "lightColor": "#fcde5d",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "features",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Getting Started",
+            "pages": [
+              "getting-started/prerequisites",
+              "getting-started/installation",
+              "getting-started/configuration",
+              "getting-started/deployment"
+            ]
+          },
+          {
+            "group": "Setup Guides",
+            "pages": [
+              "setup/supabase",
+              "setup/google-oauth",
+              "setup/dodo-payments",
+              "setup/database",
+              "setup/webhooks"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/authentication",
+              "features/subscriptions",
+              "features/payments",
+              "features/dashboard",
+              "features/invoices"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/project-structure",
+              "development/database-schema",
+              "development/server-actions",
+              "development/components",
+              "development/webhooks"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/vercel",
+              "deployment/environment-variables",
+              "deployment/production-checklist"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Server Actions",
+            "pages": [
+              "api/create-user",
+              "api/get-user",
+              "api/create-dodo-customer",
+              "api/get-user-subscription",
+              "api/get-products",
+              "api/change-plan",
+              "api/cancel-subscription",
+              "api/restore-subscription",
+              "api/get-invoices",
+              "api/delete-account"
+            ]
+          },
+          {
+            "group": "Webhook Handlers",
+            "pages": [
+              "api/webhook-overview",
+              "api/webhook-events"
+            ]
+          },
+          {
+            "group": "Database Schema",
+            "pages": [
+              "api/schema-users",
+              "api/schema-subscriptions",
+              "api/schema-payments"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Google OAuth authentication via Supabase",
+    "Subscription management with Dodo Payments",
+    "Dynamic product plans with configurable features",
+    "Real-time webhook integration for subscription events",
+    "PostgreSQL database with Drizzle ORM",
+    "Comprehensive dashboard with billing management",
+    "Invoice history and payment tracking",
+    "Built with Next.js 15, React 19, and Tailwind CSS"
+  ],
+  "publicApiSurface": [
+    "createUser()",
+    "getUser()",
+    "createDodoCustomer()",
+    "getUserSubscription()",
+    "getProducts()",
+    "changePlan()",
+    "cancelSubscription()",
+    "restoreSubscription()",
+    "getInvoices()",
+    "deleteAccount()",
+    "dodoWebhookHandler"
+  ]
+}
