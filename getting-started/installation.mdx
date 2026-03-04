@@ -1,0 +1,240 @@
+---
+title: Installation
+description: Clone the repository and install dependencies for the Dodo Supabase Subscription Starter
+---
+
+This guide will walk you through cloning the repository and installing all necessary dependencies.
+
+## Clone the Repository
+
+<Steps>
+  <Step title="Clone via Git">
+    Clone the repository to your local machine:
+
+    ```bash
+    git clone https://github.com/dodopayments/dodo-supabase-subscription-starter.git
+    ```
+  </Step>
+
+  <Step title="Navigate to Project Directory">
+    Change into the project directory:
+
+    ```bash
+    cd dodo-supabase-subscription-starter
+    ```
+  </Step>
+</Steps>
+
+## Install Dependencies
+
+Install the project dependencies using your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install
+```
+
+```bash pnpm
+pnpm install
+```
+
+```bash yarn
+yarn install
+```
+
+```bash bun
+bun install
+```
+</CodeGroup>
+
+<Note>
+  The installation may take a few minutes as it downloads all required packages including Next.js, React, Supabase, and Dodo Payments libraries.
+</Note>
+
+## Project Structure
+
+After installation, your project structure will look like this:
+
+```
+dodo-supabase-subscription-starter/
+├── app/                    # Next.js app directory
+├── components/            # React components
+├── lib/                   # Utility functions and configurations
+├── db/                    # Database schema and migrations
+├── supabase/              # Supabase Edge Functions
+│   └── functions/
+│       └── dodo-webhook/  # Webhook handler
+├── public/                # Static assets
+├── .env.example          # Environment variables template
+├── package.json          # Project dependencies and scripts
+└── drizzle.config.ts     # Drizzle ORM configuration
+```
+
+## Available Scripts
+
+The `package.json` includes these useful scripts:
+
+<AccordionGroup>
+  <Accordion title="Development">
+    ```json
+    "dev": "next dev --turbopack"
+    ```
+    Starts the development server with Turbopack for faster builds.
+
+    <CodeGroup>
+    ```bash npm
+    npm run dev
+    ```
+
+    ```bash pnpm
+    pnpm run dev
+    ```
+
+    ```bash yarn
+    yarn dev
+    ```
+
+    ```bash bun
+    bun run dev
+    ```
+    </CodeGroup>
+  </Accordion>
+
+  <Accordion title="Build & Production">
+    ```json
+    "build": "next build --turbopack",
+    "start": "next start"
+    ```
+    Build the application for production and start the production server.
+
+    <CodeGroup>
+    ```bash npm
+    npm run build
+    npm start
+    ```
+
+    ```bash pnpm
+    pnpm run build
+    pnpm start
+    ```
+
+    ```bash yarn
+    yarn build
+    yarn start
+    ```
+
+    ```bash bun
+    bun run build
+    bun start
+    ```
+    </CodeGroup>
+  </Accordion>
+
+  <Accordion title="Database Operations">
+    ```json
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+    ```
+
+    - **db:generate** - Generate migration files from schema
+    - **db:migrate** - Run database migrations
+    - **db:push** - Push schema changes directly to database
+    - **db:studio** - Open Drizzle Studio for database management
+  </Accordion>
+
+  <Accordion title="Code Quality">
+    ```json
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
+    ```
+
+    - **lint** - Run ESLint for code quality checks
+    - **typecheck** - Run TypeScript type checking
+  </Accordion>
+
+  <Accordion title="Webhook Deployment">
+    ```json
+    "deploy:webhook": "supabase functions deploy dodo-webhook --no-verify-jwt"
+    ```
+
+    Deploy the Dodo webhook handler to Supabase Edge Functions.
+
+    <CodeGroup>
+    ```bash npm
+    npm run deploy:webhook -- --project-ref your-project-ref
+    ```
+
+    ```bash pnpm
+    pnpm run deploy:webhook --project-ref your-project-ref
+    ```
+
+    ```bash yarn
+    yarn deploy:webhook --project-ref your-project-ref
+    ```
+
+    ```bash bun
+    bun run deploy:webhook --project-ref your-project-ref
+    ```
+    </CodeGroup>
+  </Accordion>
+
+  <Accordion title="Local Tunneling (Development)">
+    ```json
+    "ngrok": "ngrok http 3000"
+    ```
+
+    Create a public URL for local development webhook testing.
+
+    <CodeGroup>
+    ```bash npm
+    npm run ngrok
+    ```
+
+    ```bash pnpm
+    pnpm run ngrok
+    ```
+
+    ```bash yarn
+    yarn ngrok
+    ```
+
+    ```bash bun
+    bun run ngrok
+    ```
+    </CodeGroup>
+  </Accordion>
+</AccordionGroup>
+
+## Verify Installation
+
+To verify that everything is installed correctly, run:
+
+<CodeGroup>
+```bash npm
+npm run typecheck
+```
+
+```bash pnpm
+pnpm run typecheck
+```
+
+```bash yarn
+yarn typecheck
+```
+
+```bash bun
+bun run typecheck
+```
+</CodeGroup>
+
+This command checks for any TypeScript errors. If it completes without errors, your installation is successful.
+
+<Warning>
+  Do not run the development server yet. You need to configure environment variables first.
+</Warning>
+
+## Next Steps
+
+With the dependencies installed, proceed to [Configuration](/getting-started/configuration) to set up your environment variables and connect to Supabase and Dodo Payments.

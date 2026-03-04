@@ -1,0 +1,623 @@
+---
+title: "Production Checklist"
+description: "Complete pre-launch checklist to ensure your Dodo Supabase Subscription Starter is production-ready"
+---
+
+## Overview
+
+This comprehensive checklist ensures your subscription application is secure, functional, and ready for real users and payments. Complete all items before switching to live mode.
+
+<Warning>
+  **Do not skip any items in this checklist.** Each step is critical for security, functionality, and user experience.
+</Warning>
+
+## Pre-Deployment Checklist
+
+### Supabase Configuration
+
+<AccordionGroup>
+  <Accordion title="Database Setup" icon="database">
+
+- [ ] **Database schema deployed**
+  ```bash
+  bun run db:push
+  ```
+  Verify tables exist: `users`, `subscriptions`, `payments`
+
+- [ ] **Row Level Security (RLS) enabled on all tables**
+  - Check in Supabase Dashboard → Database → Tables
+  - Each table should show RLS is enabled
+  - Test that users cannot access other users' data
+
+- [ ] **Database indexes optimized**
+  - Verify indexes exist on frequently queried columns
+  - Check query performance in Supabase Dashboard
+
+- [ ] **Database backups configured**
+  - Enable automated backups in Supabase Dashboard
+  - Test backup restoration process
+  - Document backup schedule
+
+- [ ] **Connection pooling configured**
+  - Verify Supabase connection pooling is enabled (default)
+  - Monitor connection usage in Supabase Dashboard
+
+</Accordion>
+
+  <Accordion title="Authentication" icon="lock">
+
+- [ ] **Google OAuth configured**
+  - Client ID and Secret set in Supabase
+  - Authorized redirect URIs include production URLs
+  - OAuth consent screen configured with correct branding
+  - Privacy policy and terms of service URLs set
+
+- [ ] **Redirect URLs configured**
+  - Production domain added to allowed redirect URLs
+  - Site URL set to production domain
+  - Test authentication flow from production domain
+
+- [ ] **Email templates customized**
+  - Confirmation email template reviewed
+  - Reset password email template reviewed
+  - Magic link email template reviewed (if used)
+  - All templates use production domain URLs
+
+- [ ] **Auth security settings reviewed**
+  - Rate limiting enabled
+  - Session timeout configured appropriately
+  - JWT expiry settings reviewed
+  - Disable password authentication if only using OAuth
+
+- [ ] **Test authentication flow**
+  - Sign up new user
+  - Sign in existing user
+  - Sign out
+  - Test on multiple devices/browsers
+
+</Accordion>
+
+  <Accordion title="Edge Functions" icon="bolt">
+
+- [ ] **Webhook function deployed**
+  ```bash
+  bun run deploy:webhook --project-ref [your-project-ref]
+  ```
+  Verify deployment in Supabase Dashboard → Edge Functions
+
+- [ ] **Environment variables set in Supabase**
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `DODO_WEBHOOK_SECRET`
+
+- [ ] **Function logs monitoring enabled**
+  - Test webhook function receives requests
+  - Monitor logs for errors
+  - Set up alerts for critical errors
+
+- [ ] **Function performance tested**
+  - Test with multiple concurrent webhook calls
+  - Verify response times are acceptable
+  - Check cold start performance
+
+</Accordion>
+</AccordionGroup>
+
+### Dodo Payments Configuration
+
+<AccordionGroup>
+  <Accordion title="Account Setup" icon="credit-card">
+
+- [ ] **Business information completed**
+  - Legal business name
+  - Business address
+  - Tax information
+  - Bank account for payouts
+
+- [ ] **API keys generated**
+  - Test mode keys for staging
+  - Live mode keys for production
+  - Keys stored securely (never in code)
+
+- [ ] **Payment methods enabled**
+  - Credit/debit cards enabled
+  - Additional payment methods configured (if needed)
+  - Payment method restrictions reviewed
+
+- [ ] **Payout settings configured**
+  - Payout schedule set
+  - Bank account verified
+  - Test payout processed (in test mode)
+
+</Accordion>
+
+  <Accordion title="Products & Pricing" icon="tag">
+
+- [ ] **All products created**
+  - Product names, descriptions, and images set
+  - Pricing configured correctly
+  - Billing cycles match business requirements
+
+- [ ] **Product metadata configured**
+  ```json
+  {
+    "features": [
+      "Feature 1",
+      "Feature 2",
+      "Feature 3"
+    ]
+  }
+  ```
+  - Features list complete and accurate
+  - Metadata reflects actual product capabilities
+
+- [ ] **Pricing tested in test mode**
+  - All subscription tiers tested
+  - Upgrade/downgrade flows verified
+  - Proration calculations correct
+
+- [ ] **Trial periods configured** (if applicable)
+  - Trial duration set correctly
+  - Trial-to-paid conversion flow tested
+
+- [ ] **Products activated in live mode**
+  - All products created in live environment
+  - Pricing matches test mode
+  - Products visible in checkout
+
+</Accordion>
+
+  <Accordion title="Webhooks" icon="webhook">
+
+- [ ] **Webhook endpoint configured**
+  - URL: `https://[project-ref].supabase.co/functions/v1/dodo-webhook`
+  - Endpoint is accessible and responds correctly
+
+- [ ] **All required events selected**
+  - `payment.succeeded`
+  - `payment.failed`
+  - `payment.processing`
+  - `payment.cancelled`
+  - `subscription.active`
+  - `subscription.plan_changed`
+  - `subscription.renewed`
+  - `subscription.on_hold`
+  - `subscription.cancelled`
+  - `subscription.expired`
+  - `subscription.failed`
+
+- [ ] **Webhook signature verification working**
+  - Test webhook calls are verified successfully
+  - Failed verification returns 400 error
+  - Webhook secret matches environment variable
+
+- [ ] **Webhook retry mechanism tested**
+  - Simulate webhook failure
+  - Verify Dodo Payments retries
+  - Check retry logs in Dodo dashboard
+
+- [ ] **Webhook monitoring enabled**
+  - Set up alerts for webhook failures
+  - Monitor webhook response times
+  - Track webhook delivery success rate
+
+</Accordion>
+</AccordionGroup>
+
+### Application Configuration
+
+<AccordionGroup>
+  <Accordion title="Environment Variables" icon="gear">
+
+- [ ] **All variables set in production**
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `DATABASE_URL`
+  - `DODO_PAYMENTS_API_KEY`
+  - `DODO_WEBHOOK_SECRET`
+  - `DODO_PAYMENTS_ENVIRONMENT`
+
+- [ ] **Variables use production values**
+  - Supabase URL points to production project
+  - Dodo API key is live mode key
+  - `DODO_PAYMENTS_ENVIRONMENT=live_mode`
+
+- [ ] **Secrets are not exposed**
+  - Service role key not in client-side code
+  - API keys not committed to repository
+  - No secrets in error messages or logs
+
+- [ ] **Environment-specific configs validated**
+  - Development uses test mode
+  - Preview/staging uses test mode
+  - Production uses live mode
+
+</Accordion>
+
+  <Accordion title="Security" icon="shield">
+
+- [ ] **HTTPS enabled**
+  - Production site uses HTTPS
+  - All API calls use HTTPS
+  - No mixed content warnings
+
+- [ ] **CORS configured correctly**
+  - Only production domains allowed
+  - Webhook endpoint accepts Dodo Payments requests
+
+- [ ] **Rate limiting implemented**
+  - API routes have rate limiting
+  - Authentication endpoints protected
+  - Checkout creation rate limited
+
+- [ ] **Input validation**
+  - All user inputs validated
+  - SQL injection prevented (Drizzle ORM handles this)
+  - XSS attacks prevented (React handles this)
+
+- [ ] **Error handling**
+  - Errors don't expose sensitive information
+  - User-friendly error messages
+  - Errors logged for debugging
+
+- [ ] **Dependencies updated**
+  - No known security vulnerabilities
+  - Run `npm audit` or `bun audit`
+  - Update vulnerable packages
+
+</Accordion>
+
+  <Accordion title="Performance" icon="rocket">
+
+- [ ] **Build optimization**
+  - Production build completes successfully
+  - No build warnings or errors
+  - Bundle size optimized
+
+- [ ] **Image optimization**
+  - All images use Next.js Image component
+  - Images appropriately sized
+  - WebP format used where possible
+
+- [ ] **Caching strategy**
+  - Static assets cached appropriately
+  - API responses use proper cache headers
+  - Supabase queries cached when appropriate
+
+- [ ] **Database query optimization**
+  - Slow queries identified and optimized
+  - Unnecessary queries eliminated
+  - Query results cached when appropriate
+
+- [ ] **Load testing completed**
+  - Application performs well under expected load
+  - Database handles concurrent users
+  - Webhook function processes multiple events
+
+</Accordion>
+</AccordionGroup>
+
+### Testing
+
+<AccordionGroup>
+  <Accordion title="User Flows" icon="users">
+
+- [ ] **Complete signup flow**
+  1. Visit landing page
+  2. Click sign up
+  3. Authenticate with Google
+  4. Redirected to dashboard
+  5. User record created in database
+
+- [ ] **Complete subscription flow**
+  1. View pricing page
+  2. Select a plan
+  3. Redirected to Dodo Payments checkout
+  4. Complete test payment
+  5. Redirected back to application
+  6. Subscription active in dashboard
+  7. Webhook received and processed
+  8. Database updated correctly
+
+- [ ] **Subscription management**
+  - View current subscription
+  - Change plan (upgrade/downgrade)
+  - Cancel subscription
+  - Reactivate subscription
+  - View billing history
+  - Download invoices
+
+- [ ] **Payment scenarios**
+  - Successful payment
+  - Failed payment
+  - Retry failed payment
+  - Refund (in Dodo dashboard)
+
+- [ ] **Edge cases**
+  - User closes checkout without completing
+  - User completes checkout but webhook delayed
+  - Multiple rapid subscription changes
+  - Subscription expires naturally
+  - Payment method expires
+
+</Accordion>
+
+  <Accordion title="Browser & Device Testing" icon="mobile">
+
+- [ ] **Desktop browsers**
+  - Chrome
+  - Firefox
+  - Safari
+  - Edge
+
+- [ ] **Mobile browsers**
+  - iOS Safari
+  - Android Chrome
+  - Mobile responsive design
+
+- [ ] **Screen sizes**
+  - Mobile (320px+)
+  - Tablet (768px+)
+  - Desktop (1024px+)
+  - Large desktop (1920px+)
+
+- [ ] **Accessibility**
+  - Keyboard navigation works
+  - Screen reader compatible
+  - Color contrast meets WCAG standards
+  - Focus states visible
+
+</Accordion>
+</AccordionGroup>
+
+### Legal & Compliance
+
+- [ ] **Terms of Service**
+  - Terms of service page created
+  - Link in footer
+  - Referenced during signup
+  - Updated for subscription model
+
+- [ ] **Privacy Policy**
+  - Privacy policy page created
+  - Link in footer
+  - Referenced during signup
+  - Covers data collection and usage
+  - Mentions third-party services (Supabase, Dodo Payments)
+
+- [ ] **Refund Policy**
+  - Refund policy documented
+  - Clearly communicated to users
+  - Consistent with Dodo Payments settings
+
+- [ ] **GDPR Compliance** (if serving EU users)
+  - Cookie consent banner (if using cookies)
+  - Data export functionality
+  - Account deletion functionality
+  - Data processing agreement with vendors
+
+- [ ] **Tax compliance**
+  - Tax collection configured in Dodo Payments
+  - Tax rates set for applicable regions
+  - Tax information collected from users if required
+
+### Monitoring & Analytics
+
+- [ ] **Error tracking configured**
+  - Error monitoring service integrated (e.g., Sentry)
+  - Errors logged with context
+  - Alerts for critical errors
+
+- [ ] **Analytics configured**
+  - User analytics tracking (e.g., Google Analytics, Vercel Analytics)
+  - Conversion funnel tracking
+  - Subscription metrics tracking
+
+- [ ] **Application monitoring**
+  - Uptime monitoring (e.g., UptimeRobot)
+  - Performance monitoring (Vercel Analytics)
+  - Database monitoring (Supabase Dashboard)
+
+- [ ] **Payment monitoring**
+  - Dodo Payments dashboard monitored
+  - Failed payment alerts configured
+  - Subscription churn tracked
+
+- [ ] **Webhook monitoring**
+  - Webhook delivery success rate tracked
+  - Failed webhooks investigated
+  - Webhook processing time monitored
+
+### Documentation
+
+- [ ] **Internal documentation**
+  - Environment setup documented
+  - Deployment process documented
+  - Rollback procedure documented
+  - Contact information for services (Supabase, Dodo Payments)
+
+- [ ] **User documentation** (if applicable)
+  - Help center or FAQ
+  - Subscription management guide
+  - Contact/support information
+
+- [ ] **Runbooks**
+  - Incident response procedures
+  - Common issues and solutions
+  - Escalation procedures
+
+### Launch Preparation
+
+- [ ] **Communication plan**
+  - Launch announcement prepared
+  - Social media posts scheduled
+  - Email list ready (if applicable)
+
+- [ ] **Support readiness**
+  - Support email configured
+  - Support team trained
+  - Support tools ready (e.g., help desk)
+
+- [ ] **Backup plan**
+  - Rollback procedure documented
+  - Ability to revert to previous version
+  - Database backup created immediately before launch
+
+- [ ] **Soft launch considered**
+  - Beta users or limited rollout
+  - Gradual traffic increase
+  - Monitor metrics closely
+
+## Pre-Launch Testing Checklist
+
+### Critical Path Testing (Test Mode)
+
+Before switching to live mode, complete these tests in test mode:
+
+1. **New user journey**
+   - [ ] Sign up new account
+   - [ ] Verify email/phone (if required)
+   - [ ] Complete profile
+   - [ ] Access dashboard
+
+2. **Subscription journey**
+   - [ ] View pricing
+   - [ ] Select plan
+   - [ ] Complete checkout with test card
+   - [ ] Verify subscription active
+   - [ ] Verify webhook processed
+   - [ ] Verify database updated
+   - [ ] Verify user has access to features
+
+3. **Subscription changes**
+   - [ ] Upgrade to higher tier
+   - [ ] Downgrade to lower tier
+   - [ ] Cancel subscription
+   - [ ] Verify each webhook processed
+   - [ ] Verify each database update
+
+4. **Payment failures**
+   - [ ] Use test card that fails
+   - [ ] Verify failure webhook processed
+   - [ ] Verify user notified
+   - [ ] Verify retry mechanism works
+
+5. **Data verification**
+   - [ ] Check user data in database
+   - [ ] Check subscription data in database
+   - [ ] Check payment data in database
+   - [ ] Verify data relationships correct
+
+## Switching to Live Mode
+
+<Warning>
+  Only proceed after ALL checklist items are complete and tested.
+</Warning>
+
+### Step-by-Step Process
+
+1. **Final test mode verification**
+   ```bash
+   # Verify environment
+   echo $DODO_PAYMENTS_ENVIRONMENT
+   # Should output: test_mode
+   ```
+
+2. **Update environment variables**
+   - In Vercel Dashboard:
+     - Update `DODO_PAYMENTS_API_KEY` to live mode key
+     - Update `DODO_PAYMENTS_ENVIRONMENT` to `live_mode`
+   - In Supabase Edge Function:
+     - Update `DODO_WEBHOOK_SECRET` if different in live mode
+
+3. **Deploy with live mode settings**
+   ```bash
+   # Trigger new deployment
+   git commit --allow-empty -m "Switch to live mode"
+   git push
+   ```
+
+4. **Verify live mode active**
+   - Check Vercel deployment logs
+   - Verify environment variables in Vercel
+   - Test with live mode API key
+
+5. **Test with real payment**
+   - Create test subscription with real card
+   - Use a card you control
+   - Verify full flow works
+   - Cancel immediately if just testing
+
+6. **Monitor closely**
+   - Watch error logs for 24 hours
+   - Monitor webhook deliveries
+   - Check database for issues
+   - Verify payment processing
+
+## Post-Launch Monitoring
+
+### First 24 Hours
+
+- [ ] Monitor error rates
+- [ ] Watch webhook success rates
+- [ ] Check payment processing
+- [ ] Verify subscription activations
+- [ ] Monitor application performance
+- [ ] Review user feedback
+
+### First Week
+
+- [ ] Analyze conversion rates
+- [ ] Review failed payments
+- [ ] Check subscription retention
+- [ ] Monitor database performance
+- [ ] Review support tickets
+- [ ] Gather user feedback
+
+### Ongoing
+
+- [ ] Weekly performance reviews
+- [ ] Monthly security audits
+- [ ] Quarterly dependency updates
+- [ ] Regular backup testing
+- [ ] Continuous monitoring and optimization
+
+## Rollback Procedure
+
+If critical issues arise:
+
+1. **Switch back to test mode**
+   - Update `DODO_PAYMENTS_ENVIRONMENT` to `test_mode`
+   - Update `DODO_PAYMENTS_API_KEY` to test key
+   - Deploy immediately
+
+2. **Investigate issue**
+   - Review error logs
+   - Check webhook logs
+   - Verify database state
+   - Identify root cause
+
+3. **Communicate with users**
+   - Notify active users of issue
+   - Provide timeline for resolution
+   - Offer support contact
+
+4. **Fix and retest**
+   - Implement fix
+   - Test thoroughly in test mode
+   - Repeat pre-launch testing
+   - Redeploy to live mode
+
+## Getting Help
+
+If you encounter issues:
+
+- **Supabase Support**: [support.supabase.com](https://support.supabase.com)
+- **Dodo Payments Support**: [support.dodopayments.com](https://dodopayments.com)
+- **Discord Community**: [discord.gg/bYqAp4ayYh](https://discord.gg/bYqAp4ayYh)
+- **Documentation**: [docs.dodopayments.com](https://docs.dodopayments.com)
+
+<Note>
+  Keep this checklist and refer back to it for each major deployment or update.
+</Note>

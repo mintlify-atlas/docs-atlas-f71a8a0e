@@ -1,0 +1,478 @@
+---
+title: 'User Dashboard'
+description: 'Complete guide to the user dashboard featuring billing, invoices, and account management'
+icon: 'grid-2'
+---
+
+## Overview
+
+The Dodo Starter kit includes a fully-featured user dashboard with tabbed navigation for billing management, invoice history, and account settings.
+
+<Frame>
+  <img src="/images/dashboard.png" alt="User Dashboard" />
+</Frame>
+
+## Dashboard Component
+
+The main dashboard component orchestrates all user-facing features:
+
+```tsx components/dashboard/dashboard.tsx
+export function Dashboard(props: {
+  products: ProductListResponse[];
+  user: User;
+  userSubscription: {
+    subscription: SelectSubscription | null;
+    user: SelectUser;
+  };
+  invoices: SelectPayment[];
+}) {
+  const [active, setActive] = useState("manage-subscription");
+
+  const components = [
+    { id: "manage-subscription", label: "Billing", icon: CreditCard },
+    { id: "payments", label: "Invoices", icon: ReceiptText },
+    { id: "account", label: "Account", icon: UserIcon },
+  ];
+
+  return (
+    <div className="md:px-8 py-12 max-w-7xl mx-auto">
+      <Header />
+      <Tabs value={active} onValueChange={setActive}>
+        <TabsList>
+          {components.map((item) => {
+            const IconComponent = item.icon;
+            return (
+              <TabsTrigger key={item.id} value={item.id}>
+                <IconComponent className="h-4 w-4" />
+                <span>{item.label}</span>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+
+        <TabsContent value="manage-subscription">
+          <SubscriptionManagement
+            products={props.products}
+            currentPlan={props.userSubscription.subscription}
+            updatePlan={{
+              currentPlan: props.userSubscription.subscription,
+              onPlanChange: handlePlanChange,
+              triggerText: props.userSubscription.user.currentSubscriptionId
+                ? "Change Plan"
+                : "Upgrade Plan",
+              products: props.products,
+            }}
+            cancelSubscription={{
+              products: props.products,
+              title: "Cancel Subscription",
+              description: "Are you sure you want to cancel your subscription?",
+              plan: props.userSubscription.subscription,
+              onCancel: async (subscriptionId) => {
+                await cancelSubscription({ subscriptionId });
+                toast.success("Subscription cancelled successfully");
+                window.location.reload();
+              },
+            }}
+          />
+        </TabsContent>
+
+        <TabsContent value="payments">
+          <InvoiceHistory invoices={props.invoices} />
+        </TabsContent>
+
+        <TabsContent value="account">
+          <AccountManagement
+            user={props.user}
+            userSubscription={props.userSubscription}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+```
+
+## Dashboard Page
+
+The dashboard page loads all necessary data server-side:
+
+```tsx app/dashboard/page.tsx
+import { getUser } from "@/actions/get-user";
+import { getProducts } from "@/actions/get-products";
+import { Dashboard } from "@/components/dashboard/dashboard";
+import { redirect } from "next/navigation";
+import { getUserSubscription } from "@/actions/get-user-subscription";
+import { getInvoices } from "@/actions/get-invoices";
+
+export default async function DashboardPage() {
+  const userRes = await getUser();
+  const productRes = await getProducts();
+  const userSubscriptionRes = await getUserSubscription();
+  const invoicesRes = await getInvoices();
+  
+  if (!userRes.success) {
+    redirect("/login");
+  }
+
+  if (
+    !productRes.success ||
+    !userSubscriptionRes.success ||
+    !invoicesRes.success
+  ) {
+    return <div>Internal Server Error</div>;
+  }
+
+  return (
+    <div className="px-2">
+      <Dashboard
+        products={productRes.data}
+        user={userRes.data}
+        userSubscription={userSubscriptionRes.data}
+        invoices={invoicesRes.data}
+      />
+    </div>
+  );
+}
+```
+
+**Data Loading:**
+1. Check user authentication
+2. Fetch available products from Dodo Payments
+3. Load user's subscription details
+4. Retrieve invoice history
+5. Render dashboard with all data
+
+## Tab Navigation
+
+The dashboard uses animated tab navigation with a smooth indicator:
+
+```tsx
+const [borderPosition, setBorderPosition] = useState({
+  left: 0,
+  top: 0,
+  width: 0,
+  height: 2,
+});
+
+useEffect(() => {
+  if (!tabsListRef.current) return;
+
+  const tabsList = tabsListRef.current;
+  const activeTab = tabsList.querySelector(
+    `[data-state="active"]`
+  ) as HTMLElement;
+  const isMobile = window.innerWidth < 640;
+
+  if (activeTab) {
+    const tabsListRect = tabsList.getBoundingClientRect();
+    const activeTabRect = activeTab.getBoundingClientRect();
+
+    if (isMobile) {
+      setBorderPosition({
+        left: 0,
+        top: activeTabRect.top - tabsListRect.top,
+        width: 2,
+        height: activeTabRect.height,
+      });
+    } else {
+      setBorderPosition({
+        left: activeTabRect.left - tabsListRect.left,
+        top: tabsListRect.height - 2,
+        width: activeTabRect.width,
+        height: 2,
+      });
+    }
+  }
+}, [active]);
+
+return (
+  <motion.div
+    className="absolute bg-white rounded-full"
+    animate={borderPosition}
+    transition={{
+      type: "spring",
+      stiffness: 300,
+      damping: 30,
+    }}
+  />
+);
+```
+
+**Features:**
+- Smooth animated transitions between tabs
+- Responsive design (vertical on mobile, horizontal on desktop)
+- Visual indicator showing active tab
+- Keyboard navigation support
+
+## Billing Tab
+
+The billing tab shows subscription management features:
+
+<AccordionGroup>
+  <Accordion title="Current Plan Details">
+    - Plan name and description
+    - Subscription status badge (active/cancelled)
+    - Price and billing interval
+    - Next billing date or cancellation date
+    - Plan features list
+  </Accordion>
+
+  <Accordion title="Actions">
+    - **Change Plan**: Upgrade or downgrade subscription
+    - **Cancel Subscription**: Two-step cancellation dialog
+    - **Restore Subscription**: For cancelled subscriptions
+  </Accordion>
+
+  <Accordion title="Billing Information">
+    - Current price and interval (monthly/yearly)
+    - Next billing date
+    - Cancellation date (if applicable)
+  </Accordion>
+</AccordionGroup>
+
+## Invoices Tab
+
+The invoices tab displays payment history with detailed information:
+
+```tsx components/dashboard/invoice-history.tsx
+export function InvoiceHistory({
+  invoices,
+}: InvoiceHistoryProps) {
+  return (
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ReceiptText className="h-5 w-5 text-primary" />
+          Invoice History
+        </CardTitle>
+        <CardDescription>
+          Your past invoices and payment receipts.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+              <TableHead className="text-right">Status</TableHead>
+              <TableHead className="text-right">Payment Method</TableHead>
+              <TableHead className="text-right">Invoice</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {invoices.map((inv) => (
+              <TableRow key={inv.paymentId}>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {new Date(inv.createdAt).toLocaleDateString()}
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  ${Number(inv.totalAmount) / 100}
+                </TableCell>
+                <TableCell className="text-right">
+                  <TailwindBadge
+                    variant={inv.status === "succeeded" ? "green" : "red"}
+                  >
+                    {inv.status === "succeeded" ? "Paid" : "Failed"}
+                  </TailwindBadge>
+                </TableCell>
+                <TableCell className="text-right">
+                  {inv.cardNetwork && inv.cardLastFour ? (
+                    <span className="flex items-center justify-end gap-2">
+                      {getPaymentMethodLogo(inv.cardNetwork)} {inv.cardLastFour}
+                    </span>
+                  ) : (
+                    <span>{inv.paymentMethod || "N/A"}</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      window.open(
+                        `https://dodopayments.com/invoices/${inv.paymentId}`,
+                        "_blank"
+                      );
+                    }}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Invoice Details:**
+- Payment date and time
+- Amount with currency formatting
+- Payment status badge (Paid/Failed)
+- Payment method with card logo
+- Download invoice button
+
+## Account Tab
+
+The account management tab handles user profile and account actions:
+
+```tsx components/dashboard/account-management.tsx
+export function AccountManagement({
+  user,
+  userSubscription,
+}: AccountManagementProps) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.reload();
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsLoading(true);
+    const res = await deleteAccount();
+    if (res.success) {
+      toast.success("Account deleted successfully");
+      window.location.reload();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  return (
+    <Card className="shadow-lg">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <UserIcon className="h-5 w-5 text-primary" />
+          Account Details
+        </CardTitle>
+        <CardDescription>
+          Manage your account settings
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-8">
+        {/* User Profile */}
+        <div className="p-4 rounded-xl bg-gradient-to-r from-muted/30">
+          <Avatar className="w-12 h-12">
+            <AvatarImage src={user.user_metadata.avatar_url} />
+            <AvatarFallback>
+              {user.user_metadata.name?.charAt(0)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex flex-col mt-2">
+            <h3 className="text-xl font-semibold">
+              {user.user_metadata.name}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {user.email}
+            </p>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          <Button onClick={handleSignOut} variant="destructive">
+            <LogOutIcon className="h-5 w-5" />
+            Logout
+          </Button>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline">
+                <Trash2Icon className="h-4 w-4" />
+                Delete Account
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete
+                  your account and remove your data from our servers.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <Button
+                  disabled={isLoading}
+                  onClick={handleDeleteAccount}
+                  variant="destructive"
+                >
+                  {isLoading ? "Deleting..." : "Delete Account"}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Account Features:**
+- User avatar and display name
+- Email address
+- Logout functionality
+- Account deletion with confirmation dialog
+
+## Responsive Design
+
+The dashboard is fully responsive:
+
+- **Mobile**: Vertical tab navigation, stacked content
+- **Tablet**: Compact layout with optimized spacing
+- **Desktop**: Full-width layout with horizontal tabs
+
+## Loading States
+
+All actions include proper loading states:
+
+```tsx
+{isLoading ? (
+  <LoaderCircle className="size-4 animate-spin" />
+) : (
+  <span>Action Text</span>
+)}
+```
+
+## Error Handling
+
+Toast notifications provide user feedback:
+
+```tsx
+import { toast } from "sonner";
+
+const handleAction = async () => {
+  try {
+    const result = await someAction();
+    if (result.success) {
+      toast.success("Action completed successfully");
+    } else {
+      toast.error(result.error);
+    }
+  } catch (error) {
+    toast.error("An unexpected error occurred");
+  }
+};
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Subscription Management" icon="credit-card" href="/features/subscriptions">
+    Deep dive into subscription features
+  </Card>
+  <Card title="Invoice History" icon="receipt" href="/features/invoices">
+    Learn about invoice tracking
+  </Card>
+</CardGroup>

@@ -1,122 +1,125 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Dodo Supabase Subscription Starter",
+  "theme": "almond",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#fbad0e",
+    "light": "#fcde5d",
+    "dark": "#fbad0e"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/a2390e50-0469-438c-a0d1-ebeb48eb1f16.png",
+  "logo": {
+    "light": "https://media.brand.dev/a2390e50-0469-438c-a0d1-ebeb48eb1f16.png",
+    "dark": "https://media.brand.dev/a2390e50-0469-438c-a0d1-ebeb48eb1f16.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/dodopayments/dodo-supabase-subscription-starter"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/dodopayments/dodo-supabase-subscription-starter"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Overview",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "features",
+              "architecture"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Getting Started",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "getting-started/prerequisites",
+              "getting-started/installation",
+              "getting-started/configuration",
+              "getting-started/deployment"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Setup Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "setup/supabase",
+              "setup/google-oauth",
+              "setup/dodo-payments",
+              "setup/database",
+              "setup/webhooks"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Core Features",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "features/authentication",
+              "features/subscriptions",
+              "features/payments",
+              "features/dashboard",
+              "features/invoices"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/project-structure",
+              "development/database-schema",
+              "development/server-actions",
+              "development/components",
+              "development/webhooks"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/vercel",
+              "deployment/environment-variables",
+              "deployment/production-checklist"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Server Actions",
             "pages": [
-              "api-reference/introduction"
+              "api/create-user",
+              "api/get-user",
+              "api/create-dodo-customer",
+              "api/get-user-subscription",
+              "api/get-products",
+              "api/change-plan",
+              "api/cancel-subscription",
+              "api/restore-subscription",
+              "api/get-invoices",
+              "api/delete-account"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Webhook Handlers",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/webhook-overview",
+              "api/webhook-events"
+            ]
+          },
+          {
+            "group": "Database Schema",
+            "pages": [
+              "api/schema-users",
+              "api/schema-subscriptions",
+              "api/schema-payments"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

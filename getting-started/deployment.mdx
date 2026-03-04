@@ -1,0 +1,340 @@
+---
+title: Deployment
+description: Deploy webhook handlers and launch your subscription application
+---
+
+This guide covers deploying the webhook handler to Supabase Edge Functions, configuring Dodo Payments webhooks, and launching your application.
+
+## Deploy Webhook Handler
+
+The webhook handler processes subscription events from Dodo Payments in real-time.
+
+<Steps>
+  <Step title="Login to Supabase CLI">
+    Authenticate with Supabase:
+
+    <CodeGroup>
+    ```bash npm
+    npx supabase login
+    ```
+
+    ```bash pnpm
+    pnpm exec supabase login
+    ```
+
+    ```bash yarn
+    yarn supabase login
+    ```
+
+    ```bash bun
+    bunx supabase login
+    ```
+    </CodeGroup>
+
+    This will open your browser to complete authentication.
+  </Step>
+
+  <Step title="Find Your Project Reference">
+    Your project reference ID is in your Supabase project URL:
+
+    ```
+    https://[your-project-ref].supabase.co
+                ^^^^^^^^^^^^^^^^
+    ```
+
+    For example, if your URL is `https://abcdefgh12345678.supabase.co`, your project reference is `abcdefgh12345678`.
+  </Step>
+
+  <Step title="Deploy the Webhook Function">
+    Deploy the Dodo webhook handler to your Supabase project:
+
+    <CodeGroup>
+    ```bash npm
+    npm run deploy:webhook -- --project-ref your-project-ref
+    ```
+
+    ```bash pnpm
+    pnpm run deploy:webhook --project-ref your-project-ref
+    ```
+
+    ```bash yarn
+    yarn deploy:webhook --project-ref your-project-ref
+    ```
+
+    ```bash bun
+    bun run deploy:webhook --project-ref your-project-ref
+    ```
+    </CodeGroup>
+
+    Replace `your-project-ref` with your actual project reference ID.
+
+    <Note>
+      The `--no-verify-jwt` flag is included in the script because Dodo Payments uses webhook signatures for authentication instead of JWT tokens.
+    </Note>
+  </Step>
+
+  <Step title="Verify Deployment">
+    After successful deployment, you'll see output like:
+
+    ```bash
+    Deployed Function dodo-webhook on project your-project-ref
+    URL: https://your-project-ref.supabase.co/functions/v1/dodo-webhook
+    ```
+
+    Copy this URL for the next step.
+  </Step>
+</Steps>
+
+## Configure Dodo Payments Webhook
+
+<Steps>
+  <Step title="Add Webhook Endpoint">
+    1. Go to your [Dodo Payments Dashboard](https://dashboard.dodopayments.com)
+    2. Navigate to **Settings** → **Webhooks**
+    3. Click **Add Endpoint**
+    4. Enter your webhook URL:
+       ```
+       https://[your-project-ref].supabase.co/functions/v1/dodo-webhook
+       ```
+  </Step>
+
+  <Step title="Select Events">
+    Enable these webhook events to sync subscription data:
+
+    - `payment.succeeded`
+    - `payment.failed`
+    - `subscription.created`
+    - `subscription.updated`
+    - `subscription.cancelled`
+    - `subscription.renewed`
+
+    <Tip>
+      You can select "All events" to automatically receive new event types as Dodo Payments adds them.
+    </Tip>
+  </Step>
+
+  <Step title="Save Configuration">
+    Click **Save** to activate the webhook. Dodo Payments will now send real-time events to your application.
+  </Step>
+</Steps>
+
+## Create Subscription Products
+
+Before launching, create at least one subscription product in Dodo Payments.
+
+<Steps>
+  <Step title="Create Product">
+    1. In your Dodo Payments dashboard, go to **Products**
+    2. Click **Create Product**
+    3. Fill in the basic information:
+       - Product name (e.g., "Pro Plan")
+       - Description
+       - Price
+       - Billing cycle (monthly, yearly, etc.)
+  </Step>
+
+  <Step title="Add Feature Metadata">
+    In the **Metadata** section, add a `features` array to display plan features in your UI:
+
+    ```json
+    {
+      "features": [
+        "Unlimited projects",
+        "Priority support",
+        "Advanced analytics",
+        "Custom branding"
+      ]
+    }
+    ```
+
+    These features will automatically appear in your pricing page.
+  </Step>
+
+  <Step title="Save Product">
+    Click **Save** to create the product. Repeat for additional pricing tiers if needed.
+  </Step>
+</Steps>
+
+## Launch Development Server
+
+<Steps>
+  <Step title="Start the Application">
+    Launch the development server:
+
+    <CodeGroup>
+    ```bash npm
+    npm run dev
+    ```
+
+    ```bash pnpm
+    pnpm run dev
+    ```
+
+    ```bash yarn
+    yarn dev
+    ```
+
+    ```bash bun
+    bun run dev
+    ```
+    </CodeGroup>
+
+    The application will start on `http://localhost:3000`.
+  </Step>
+
+  <Step title="Test the Application">
+    1. Open [http://localhost:3000](http://localhost:3000) in your browser
+    2. Click **Sign In** to test Google OAuth
+    3. Navigate to the pricing page to view your subscription plans
+    4. Test the subscription flow with a test payment
+
+    <Check>
+      Your application is now running locally with full subscription functionality!
+    </Check>
+  </Step>
+</Steps>
+
+## Production Deployment
+
+When you're ready to deploy to production:
+
+### Deploy to Vercel
+
+<Steps>
+  <Step title="Quick Deploy">
+    Use the one-click deploy button:
+
+    [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/dodopayments/dodo-supabase-subscription-starter&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,DATABASE_URL,DODO_PAYMENTS_API_KEY,DODO_WEBHOOK_SECRET,DODO_PAYMENTS_ENVIRONMENT)
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    During deployment, add all environment variables from your `.env.local` file.
+
+    <Warning>
+      For production, change `DODO_PAYMENTS_ENVIRONMENT` from `test_mode` to `live_mode`.
+    </Warning>
+  </Step>
+
+  <Step title="Update OAuth Redirect URI">
+    Add your production domain to Google OAuth:
+
+    1. Go to [Google Cloud Console](https://console.cloud.google.com)
+    2. Navigate to **APIs & Services** → **Credentials**
+    3. Edit your OAuth 2.0 Client ID
+    4. Add authorized redirect URI:
+       ```
+       https://your-project-ref.supabase.co/auth/v1/callback
+       ```
+  </Step>
+
+  <Step title="Test Production Deployment">
+    1. Visit your deployed URL
+    2. Test authentication flow
+    3. Process a real subscription
+    4. Verify webhook events in Supabase logs
+  </Step>
+</Steps>
+
+### Alternative Platforms
+
+You can also deploy to:
+
+- **Netlify** - Configure build command: `npm run build`
+- **Railway** - Automatic Next.js detection
+- **Render** - Use Next.js deployment preset
+- **Self-hosted** - Run `npm run build && npm start`
+
+<Note>
+  Ensure you configure environment variables and OAuth redirect URIs for whichever platform you choose.
+</Note>
+
+## Verify Deployment
+
+Check that everything is working correctly:
+
+<AccordionGroup>
+  <Accordion title="Database Tables Created">
+    Run this command to view your database:
+
+    <CodeGroup>
+    ```bash npm
+    npm run db:studio
+    ```
+
+    ```bash pnpm
+    pnpm run db:studio
+    ```
+
+    ```bash yarn
+    yarn db:studio
+    ```
+
+    ```bash bun
+    bun run db:studio
+    ```
+    </CodeGroup>
+
+    Verify that `users`, `subscriptions`, and `payments` tables exist.
+  </Accordion>
+
+  <Accordion title="Webhook Function Active">
+    In Supabase, go to **Edge Functions** and verify that `dodo-webhook` shows as deployed and healthy.
+  </Accordion>
+
+  <Accordion title="Google OAuth Working">
+    Test signing in with Google. You should be redirected to Google's consent screen and then back to your application.
+  </Accordion>
+
+  <Accordion title="Dodo Payments Connected">
+    Your pricing page should display products from Dodo Payments with the features you defined in metadata.
+  </Accordion>
+
+  <Accordion title="Webhooks Receiving Events">
+    Make a test subscription and check Supabase logs to confirm webhook events are being received and processed.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Webhook deployment fails">
+    - Verify you're logged in: `supabase whoami`
+    - Check project reference ID is correct
+    - Ensure you have necessary permissions on the Supabase project
+  </Accordion>
+
+  <Accordion title="Google OAuth not working">
+    - Verify redirect URI matches exactly: `https://[project-ref].supabase.co/auth/v1/callback`
+    - Check that Google+ API is enabled
+    - Ensure Client ID and Secret are correctly configured in Supabase
+  </Accordion>
+
+  <Accordion title="Products not showing">
+    - Verify `DODO_PAYMENTS_API_KEY` is set correctly
+    - Check that products are created in the correct environment (test/live)
+    - Ensure `DODO_PAYMENTS_ENVIRONMENT` matches your product environment
+  </Accordion>
+
+  <Accordion title="Database connection errors">
+    - Verify `DATABASE_URL` connection string is correct
+    - Check that you replaced `[YOUR-PASSWORD]` with your actual password
+    - Ensure IP allowlist includes your deployment platform (if applicable)
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Customize Your App" icon="palette" href="/customization/overview">
+    Learn how to customize the UI, add features, and brand your application
+  </Card>
+  <Card title="Manage Subscriptions" icon="credit-card" href="/features/subscriptions">
+    Understand subscription lifecycle and management features
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    Explore available APIs and integration options
+  </Card>
+  <Card title="Webhooks Guide" icon="webhook" href="/webhooks/overview">
+    Learn about webhook events and how to handle them
+  </Card>
+</CardGroup>

@@ -1,0 +1,214 @@
+---
+title: Configuration
+description: Set up environment variables and configure Supabase, Dodo Payments, and Google OAuth
+---
+
+This guide covers all configuration steps needed to connect your application to Supabase, Dodo Payments, and Google OAuth.
+
+## Environment Variables Setup
+
+<Steps>
+  <Step title="Create Environment File">
+    Copy the example environment file to create your local configuration:
+
+    ```bash
+    cp .env.example .env.local
+    ```
+
+    The `.env.local` file will contain all your sensitive configuration values.
+  </Step>
+
+  <Step title="Configure Variables">
+    Open `.env.local` and fill in the following variables:
+
+    ```env
+    NEXT_PUBLIC_SUPABASE_URL=
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=
+    DATABASE_URL=
+    DODO_PAYMENTS_API_KEY=
+    DODO_WEBHOOK_SECRET=
+    DODO_PAYMENTS_ENVIRONMENT=
+    ```
+  </Step>
+</Steps>
+
+## Supabase Configuration
+
+<Steps>
+  <Step title="Create Supabase Project">
+    1. Go to [Supabase](https://app.supabase.com) and sign in
+    2. Click **New Project**
+    3. Choose your organization
+    4. Enter a project name and database password
+    5. Select a region close to your users
+    6. Click **Create new project**
+
+    <Note>
+      Project provisioning takes 2-3 minutes. Wait for it to complete before proceeding.
+    </Note>
+  </Step>
+
+  <Step title="Get API Credentials">
+    Navigate to **Settings** → **API** in your Supabase project:
+
+    ```env
+    NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+    ```
+
+    Copy:
+    - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+    - **Anon/Public Key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+    <Warning>
+      The anon key is safe to use in client-side code. Never expose the service role key in your frontend.
+    </Warning>
+  </Step>
+
+  <Step title="Get Database Connection String">
+    Navigate to **Settings** → **Database** in your Supabase project:
+
+    ```env
+    DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+    ```
+
+    Copy the **Connection String** and replace `[YOUR-PASSWORD]` with your database password.
+  </Step>
+</Steps>
+
+## Google OAuth Setup
+
+<Steps>
+  <Step title="Create Google Cloud Project">
+    1. Go to [Google Cloud Console](https://console.cloud.google.com)
+    2. Click **Select a project** → **New Project**
+    3. Enter a project name and click **Create**
+  </Step>
+
+  <Step title="Enable Google+ API">
+    1. In your Google Cloud project, go to **APIs & Services** → **Library**
+    2. Search for "Google+ API"
+    3. Click on it and press **Enable**
+  </Step>
+
+  <Step title="Create OAuth Credentials">
+    1. Go to **APIs & Services** → **Credentials**
+    2. Click **Create Credentials** → **OAuth client ID**
+    3. If prompted, configure the OAuth consent screen first:
+       - Choose **External** user type
+       - Fill in required app information
+       - Add your email as a test user
+    4. For Application type, select **Web application**
+    5. Add authorized redirect URI:
+       ```
+       https://[your-project-ref].supabase.co/auth/v1/callback
+       ```
+    6. Click **Create**
+    7. Copy the **Client ID** and **Client Secret**
+  </Step>
+
+  <Step title="Configure Google Provider in Supabase">
+    1. In your Supabase project, go to **Authentication** → **Providers**
+    2. Find **Google** and click to expand
+    3. Toggle **Enable Google Provider**
+    4. Paste your **Client ID** and **Client Secret**
+    5. Click **Save**
+  </Step>
+</Steps>
+
+## Dodo Payments Configuration
+
+<Steps>
+  <Step title="Create Dodo Payments Account">
+    1. Sign up at [Dodo Payments](https://dashboard.dodopayments.com)
+    2. Complete the onboarding process
+    3. Verify your email address
+  </Step>
+
+  <Step title="Get API Key">
+    1. Navigate to **Settings** → **API Keys**
+    2. Copy your API key:
+
+    ```env
+    DODO_PAYMENTS_API_KEY=dodo_sk_test_...
+    ```
+
+    <Warning>
+      Keep your API key secure. Never commit it to version control or expose it in client-side code.
+    </Warning>
+  </Step>
+
+  <Step title="Get Webhook Secret">
+    1. Navigate to **Settings** → **Webhooks**
+    2. Copy your webhook signing secret:
+
+    ```env
+    DODO_WEBHOOK_SECRET=whsec_...
+    ```
+  </Step>
+
+  <Step title="Set Environment Mode">
+    Set the payment environment to test mode during development:
+
+    ```env
+    DODO_PAYMENTS_ENVIRONMENT=test_mode
+    ```
+
+    <Note>
+      Change this to `live_mode` when deploying to production.
+    </Note>
+  </Step>
+</Steps>
+
+## Final Environment File
+
+Your complete `.env.local` should look like this:
+
+```env
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# Database URL (from Supabase Settings → Database)
+DATABASE_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
+
+# Dodo Payments Configuration
+DODO_PAYMENTS_API_KEY=dodo_sk_test_...
+DODO_WEBHOOK_SECRET=whsec_...
+DODO_PAYMENTS_ENVIRONMENT=test_mode
+```
+
+## Initialize Database Schema
+
+With your environment variables configured, push the database schema to Supabase:
+
+<CodeGroup>
+```bash npm
+npm run db:push
+```
+
+```bash pnpm
+pnpm run db:push
+```
+
+```bash yarn
+yarn db:push
+```
+
+```bash bun
+bun run db:push
+```
+</CodeGroup>
+
+This creates three tables in your database:
+- **users** - Stores user account information
+- **subscriptions** - Tracks active and past subscriptions
+- **payments** - Records payment history and invoices
+
+<Check>
+  Your application is now configured and ready for deployment!
+</Check>
+
+## Next Steps
+
+Proceed to [Deployment](/getting-started/deployment) to deploy the webhook handler and run your application for the first time.

@@ -1,0 +1,436 @@
+---
+title: "Server Actions"
+description: "Server actions overview and implementation details"
+---
+
+## Overview
+
+Server actions provide type-safe, server-side data mutations using Next.js App Router. All actions are located in the `/actions` directory and use the `"use server"` directive.
+
+## Action Response Type
+
+All server actions return a consistent response type:
+
+```typescript
+type ServerActionRes<T = void> = Promise<
+  | { success: true; data: T }
+  | { success: false; error: string }
+>;
+```
+
+## User Management Actions
+
+### get-user.ts
+
+Retrieves the authenticated user from Supabase.
+
+```typescript
+import { createClient } from "@/lib/supabase/server";
+import { ServerActionRes } from "@/types/server-action";
+import type { User } from "@supabase/supabase-js";
+
+export async function getUser(): ServerActionRes<User> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: "User not found" };
+    }
+
+    return { success: true, data: user };
+  } catch (error) {
+    return { success: false, error: "Failed to get user" };
+  }
+}
+```
+
+**Usage:**
+```typescript
+const userRes = await getUser();
+if (userRes.success) {
+  console.log(userRes.data.email);
+}
+```
+
+### create-user.ts
+
+Creates a new user record and associated Dodo Payments customer.
+
+```typescript
+export async function createUser(): ServerActionRes<string> {
+  const userRes = await getUser();
+
+  if (!userRes.success) {
+    return { success: false, error: "User not found" };
+  }
+
+  const user = userRes.data;
+
+  // Check if user already exists
+  const existingUser = await db.query.users.findFirst({
+    where: eq(users.supabaseUserId, user.id),
+  });
+
+  if (existingUser) {
+    return { success: true, data: "User already exists" };
+  }
+
+  // Create Dodo customer
+  const dodoCustomerRes = await createDodoCustomer({
+    email: user.email!,
+    name: user.user_metadata.name,
+  });
+
+  if (!dodoCustomerRes.success) {
+    return { success: false, error: "Failed to create customer" };
+  }
+
+  // Insert user record
+  await db.insert(users).values({
+    supabaseUserId: user.id,
+    dodoCustomerId: dodoCustomerRes.data.customer_id,
+    currentSubscriptionId: "",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  return { success: true, data: "User created" };
+}
+```
+
+**Workflow:**
+1. Get authenticated user from Supabase
+2. Check if user exists in database
+3. Create Dodo Payments customer
+4. Insert user record with customer ID
+
+### delete-account.ts
+
+Soft deletes a user account.
+
+```typescript
+export async function deleteAccount(): ServerActionRes {
+  try {
+    const userRes = await getUser();
+    if (!userRes.success) {
+      return { success: false, error: "User not found" };
+    }
+
+    // Delete from Supabase Auth
+    const { error } = await adminAuthClient.deleteUser(userRes.data.id);
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // Soft delete in database
+    await db
+      .update(users)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(users.supabaseUserId, userRes.data.id));
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unknown error occurred",
+    };
+  }
+}
+```
+
+## Payment Actions
+
+### create-dodo-customer.ts
+
+Creates a customer in Dodo Payments.
+
+```typescript
+import { dodoClient } from "@/lib/dodo-payments/client";
+import { Customer } from "dodopayments/resources/index.mjs";
+
+export async function createDodoCustomer(props: {
+  email: string;
+  name?: string;
+}): ServerActionRes<Customer> {
+  try {
+    const customer = await dodoClient.customers.create({
+      email: props.email,
+      name: props.name ? props.name : props.email.split("@")[0],
+    });
+
+    return { success: true, data: customer };
+  } catch (error) {
+    return { success: false, error: "Failed to create customer" };
+  }
+}
+```
+
+### get-products.ts
+
+Fetches all available products from Dodo Payments.
+
+```typescript
+import { dodoClient } from "@/lib/dodo-payments/client";
+import { ProductListResponse } from "dodopayments/resources/index.mjs";
+
+export async function getProducts(): ServerActionRes<ProductListResponse[]> {
+  try {
+    const products = await dodoClient.products.list();
+    return { success: true, data: products.items };
+  } catch (error) {
+    return { success: false, error: "Failed to fetch products" };
+  }
+}
+```
+
+### get-invoices.ts
+
+Retrieves payment history for the current user.
+
+```typescript
+export async function getInvoices(): ServerActionRes<SelectPayment[]> {
+  try {
+    const subscriptionRes = await getUserSubscription();
+
+    if (!subscriptionRes.success) {
+      return { success: false, error: "Subscription not found" };
+    }
+
+    const invoices = await db.query.payments.findMany({
+      where: eq(payments.customerId, subscriptionRes.data.user.dodoCustomerId),
+    });
+
+    return { success: true, data: invoices };
+  } catch (error) {
+    return { success: false, error: "Failed to get invoices" };
+  }
+}
+```
+
+## Subscription Actions
+
+### get-user-subscription.ts
+
+Retrieves user details and current subscription.
+
+```typescript
+type UserSubscription = {
+  subscription: SelectSubscription | null;
+  user: SelectUser;
+};
+
+export async function getUserSubscription(): ServerActionRes<UserSubscription> {
+  const userRes = await getUser();
+
+  if (!userRes.success) {
+    return { success: false, error: "User not found" };
+  }
+
+  const user = userRes.data;
+
+  // Get user details from database
+  const userDetails = await db.query.users.findFirst({
+    where: eq(users.supabaseUserId, user.id),
+  });
+
+  if (!userDetails) {
+    return { success: false, error: "User details not found" };
+  }
+
+  // Return early if no subscription
+  if (!userDetails.currentSubscriptionId) {
+    return { success: true, data: { subscription: null, user: userDetails } };
+  }
+
+  // Fetch subscription details
+  const subscription = await db.query.subscriptions.findFirst({
+    where: eq(subscriptions.subscriptionId, userDetails.currentSubscriptionId),
+  });
+
+  return {
+    success: true,
+    data: { subscription: subscription ?? null, user: userDetails },
+  };
+}
+```
+
+**Returns:**
+- User database record
+- Current subscription (null for free tier)
+
+### cancel-subscription.ts
+
+Schedules subscription cancellation at next billing date.
+
+```typescript
+export async function cancelSubscription(props: {
+  subscriptionId: string;
+}): ServerActionRes {
+  try {
+    // Update in Dodo Payments
+    const res = await dodoClient.subscriptions.update(props.subscriptionId, {
+      cancel_at_next_billing_date: true,
+    });
+
+    // Update local database
+    await db
+      .update(subscriptions)
+      .set({ cancelAtNextBillingDate: true })
+      .where(eq(subscriptions.subscriptionId, props.subscriptionId));
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unknown error occurred",
+    };
+  }
+}
+```
+
+**Note:** Cancellation is scheduled, not immediate. User retains access until next billing date.
+
+### restore-subscription.ts
+
+Cancels a scheduled subscription cancellation.
+
+```typescript
+export async function restoreSubscription(props: {
+  subscriptionId: string;
+}): ServerActionRes {
+  try {
+    await dodoClient.subscriptions.update(props.subscriptionId, {
+      cancel_at_next_billing_date: false,
+    });
+
+    await db
+      .update(subscriptions)
+      .set({ cancelAtNextBillingDate: false })
+      .where(eq(subscriptions.subscriptionId, props.subscriptionId));
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unknown error occurred",
+    };
+  }
+}
+```
+
+### change-plan.ts
+
+Changes the subscription plan with immediate proration.
+
+```typescript
+export async function changePlan(props: {
+  subscriptionId: string;
+  productId: string;
+}): ServerActionRes {
+  try {
+    await dodoClient.subscriptions.changePlan(props.subscriptionId, {
+      product_id: props.productId,
+      proration_billing_mode: "prorated_immediately",
+      quantity: 1,
+    });
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unknown error occurred",
+    };
+  }
+}
+```
+
+**Features:**
+- Immediate plan change
+- Prorated billing
+- Automatic charge/credit calculation
+
+## Error Handling Pattern
+
+All actions follow a consistent error handling pattern:
+
+```typescript
+export async function actionName(): ServerActionRes {
+  try {
+    // Action logic
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unknown error occurred",
+    };
+  }
+}
+```
+
+## Usage in Components
+
+Server actions are called from client components:
+
+```typescript
+"use client";
+
+import { cancelSubscription } from "@/actions/cancel-subscription";
+import { toast } from "sonner";
+
+function CancelButton({ subscriptionId }: { subscriptionId: string }) {
+  const handleCancel = async () => {
+    const res = await cancelSubscription({ subscriptionId });
+    
+    if (res.success) {
+      toast.success("Subscription cancelled");
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  return <button onClick={handleCancel}>Cancel</button>;
+}
+```
+
+## Best Practices
+
+1. **Always check authentication** - Use `getUser()` to verify user is logged in
+2. **Type safety** - Use proper TypeScript types for parameters and return values
+3. **Error handling** - Always wrap in try/catch and return structured responses
+4. **Database sync** - Update both Dodo Payments and local database for consistency
+5. **Transaction safety** - Consider database transactions for multi-step operations
+
+## Action Dependencies
+
+```
+get-user (base)
+  ├── create-user
+  │     └── create-dodo-customer
+  ├── delete-account
+  └── get-user-subscription
+        └── get-invoices
+
+Subscription actions:
+  ├── cancel-subscription
+  ├── restore-subscription
+  └── change-plan
+
+Product actions:
+  └── get-products
+```
+
+## Testing Actions
+
+Actions can be tested by importing and calling them directly:
+
+```typescript
+import { getProducts } from "@/actions/get-products";
+
+const result = await getProducts();
+expect(result.success).toBe(true);
+if (result.success) {
+  expect(result.data).toBeInstanceOf(Array);
+}
+```

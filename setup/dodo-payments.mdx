@@ -1,0 +1,164 @@
+---
+title: Dodo Payments Account Setup
+description: Configure your Dodo Payments account for subscription and payment processing
+---
+
+## Overview
+
+Dodo Payments handles all subscription management, billing, and payment processing for your application. This guide walks you through setting up your account and obtaining the necessary API credentials.
+
+## Create Your Dodo Payments Account
+
+<Steps>
+  <Step title="Sign up for Dodo Payments">
+    Go to [Dodo Payments Dashboard](https://dashboard.dodopayments.com) and create a new account.
+
+    Fill in your business details and verify your email address.
+  </Step>
+
+  <Step title="Get your API key">
+    Once logged in, navigate to **Settings** → **API Keys**.
+
+    Copy your API key - this is your `DODO_PAYMENTS_API_KEY`.
+
+    <Warning>
+      Your API key has full access to your Dodo Payments account. Never expose it in client-side code or commit it to version control.
+    </Warning>
+  </Step>
+
+  <Step title="Get your webhook secret">
+    In the same **Settings** section, navigate to **Webhooks**.
+
+    Copy the webhook secret - this is your `DODO_WEBHOOK_SECRET`.
+
+    <Note>
+      You'll use this secret to verify that webhook events are genuinely from Dodo Payments and haven't been tampered with.
+    </Note>
+  </Step>
+
+  <Step title="Set your environment">
+    Dodo Payments provides two environments:
+    - **test_mode**: For development and testing (no real charges)
+    - **live_mode**: For production (real payments)
+
+    For initial setup, use `test_mode`:
+    ```env
+    DODO_PAYMENTS_ENVIRONMENT=test_mode
+    ```
+  </Step>
+</Steps>
+
+## Environment Variables
+
+Add these values to your `.env.local` file:
+
+```env
+# Dodo Payments Configuration
+DODO_PAYMENTS_API_KEY=your-dodo-api-key
+DODO_WEBHOOK_SECRET=your-webhook-secret
+DODO_PAYMENTS_ENVIRONMENT=test_mode
+```
+
+## Create Subscription Products
+
+Before your application can offer subscriptions, you need to create products in Dodo Payments.
+
+<Steps>
+  <Step title="Navigate to Products">
+    In your Dodo Payments dashboard, go to **Products** → **Create Product**.
+  </Step>
+
+  <Step title="Configure product details">
+    Fill in the basic product information:
+
+    - **Product name**: e.g., "Pro Plan", "Enterprise Plan"
+    - **Description**: Brief description of what the plan includes
+    - **Price**: The recurring subscription price
+    - **Currency**: Select your currency (e.g., USD, EUR)
+    - **Billing cycle**: Choose the interval:
+      - Daily
+      - Weekly
+      - Monthly
+      - Yearly
+  </Step>
+
+  <Step title="Add product features via metadata">
+    The starter kit uses product metadata to dynamically display features in the pricing UI.
+
+    In the **Metadata** section, add a JSON object with a `features` array:
+
+    ```json
+    {
+      "features": [
+        "Unlimited projects",
+        "Advanced analytics",
+        "Priority support",
+        "Custom integrations",
+        "99.9% uptime SLA"
+      ]
+    }
+    ```
+
+    These features will automatically appear in your application's pricing page.
+  </Step>
+
+  <Step title="Save the product">
+    Click **Save** to create the product.
+
+    Repeat this process for each subscription tier you want to offer (e.g., Basic, Pro, Enterprise).
+  </Step>
+</Steps>
+
+## Product Metadata Structure
+
+The application expects product metadata in this format:
+
+```json
+{
+  "features": [
+    "Feature 1",
+    "Feature 2",
+    "Feature 3"
+  ]
+}
+```
+
+<Note>
+  The `features` array is required for the pricing page to display correctly. Without it, the product will still work but won't show any features in the UI.
+</Note>
+
+## Test vs Live Mode
+
+### Test Mode
+
+- Use for development and testing
+- No real payment processing
+- Use test card numbers (provided by Dodo Payments documentation)
+- All data is isolated from production
+
+### Live Mode
+
+<Warning>
+  Before switching to live mode, ensure:
+  - Your webhook endpoint is properly secured and deployed
+  - You've thoroughly tested all payment flows in test mode
+  - Your business information is complete in Dodo Payments settings
+  - You've reviewed and understood Dodo Payments' pricing and fees
+</Warning>
+
+To switch to live mode, update your environment variable:
+
+```env
+DODO_PAYMENTS_ENVIRONMENT=live_mode
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Setup" icon="database" href="./database">
+    Configure your database schema with Drizzle
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="./webhooks">
+    Deploy webhook handlers to process payment events
+  </Card>
+</CardGroup>

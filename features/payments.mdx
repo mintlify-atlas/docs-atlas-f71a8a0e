@@ -1,0 +1,357 @@
+---
+title: 'Payment Processing'
+description: 'Learn how payment processing, checkout sessions, and webhooks work with Dodo Payments'
+icon: 'money-bill-wave'
+---
+
+## Overview
+
+The Dodo Starter kit integrates **Dodo Payments** for secure payment processing. The system handles checkout sessions, payment webhooks, and automatic subscription updates.
+
+## Checkout Flow
+
+### Creating a Checkout Session
+
+When a user selects a plan, the system creates a checkout session:
+
+```tsx components/dashboard/dashboard.tsx
+const handlePlanChange = async (productId: string) => {
+  if (props.userSubscription.user.currentSubscriptionId) {
+    // Handle plan change for existing subscription
+    const res = await changePlan({
+      subscriptionId: props.userSubscription.user.currentSubscriptionId,
+      productId,
+    });
+
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+
+    toast.success("Plan changed successfully");
+    window.location.reload();
+    return;
+  }
+
+  // Create new checkout session for new subscription
+  try {
+    const response = await fetch(`${window.location.origin}/checkout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        product_cart: [{
+          product_id: productId,
+          quantity: 1,
+        }],
+        customer: {
+          email: props.user.email,
+          name: props.user.user_metadata.name,
+        },
+        return_url: `${window.location.origin}/dashboard`,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to create checkout session");
+    }
+
+    const { checkout_url } = await response.json();
+    window.location.href = checkout_url;
+  } catch (error) {
+    console.error("Checkout error:", error);
+    toast.error("Failed to start checkout process");
+  }
+};
+```
+
+### Checkout Route Handler
+
+The checkout route uses the Dodo Payments Next.js SDK:
+
+```ts app/checkout/route.ts
+import { Checkout } from "@dodopayments/nextjs";
+import { NextRequest } from "next/server";
+
+export const GET = async (req: NextRequest) => {
+  const { origin } = new URL(req.url);
+  const handler = Checkout({
+    bearerToken: process.env.DODO_PAYMENTS_API_KEY!,
+    returnUrl: `${origin}/dashboard`,
+    environment: process.env.DODO_PAYMENTS_ENVIRONMENT as DodoPaymentsEnvironment,
+    type: "static",
+  });
+
+  return handler(req);
+};
+
+export const POST = async (req: NextRequest) => {
+  const { origin } = new URL(req.url);
+  const handler = Checkout({
+    bearerToken: process.env.DODO_PAYMENTS_API_KEY!,
+    returnUrl: `${origin}/dashboard`,
+    environment: process.env.DODO_PAYMENTS_ENVIRONMENT as DodoPaymentsEnvironment,
+    type: "session",
+  });
+
+  return handler(req);
+};
+```
+
+**Checkout Types:**
+- **Static**: Pre-configured checkout page hosted by Dodo
+- **Session**: Dynamic checkout session created from your application
+
+## Webhook Processing
+
+Dodo Payments sends webhooks to your Supabase Edge Function when payment events occur:
+
+### Webhook Handler
+
+```ts supabase/functions/dodo-webhook/index.ts
+Deno.serve(async (req) => {
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+
+  const dodoWebhookSecret = Deno.env.get("DODO_WEBHOOK_SECRET");
+  const webhook = new Webhook(dodoWebhookSecret);
+  const rawBody = await req.text();
+  const event = JSON.parse(rawBody);
+
+  const webhookHeaders = {
+    "webhook-id": req.headers.get("webhook-id") || "",
+    "webhook-signature": req.headers.get("webhook-signature") || "",
+    "webhook-timestamp": req.headers.get("webhook-timestamp") || "",
+  };
+
+  // Verify webhook signature
+  try {
+    await webhook.verify(rawBody, webhookHeaders);
+  } catch (error) {
+    console.error("Webhook verification failed:", error.message);
+    return new Response("Invalid webhook signature", { status: 400 });
+  }
+
+  // Process events
+  switch (event.type) {
+    case "payment.succeeded":
+    case "payment.failed":
+    case "payment.processing":
+    case "payment.cancelled":
+      await managePayment(event);
+      break;
+
+    case "subscription.active":
+    case "subscription.plan_changed":
+      await manageSubscription(event);
+      await updateUserTier({
+        dodoCustomerId: event.data.customer.customer_id,
+        subscriptionId: event.data.subscription_id,
+      });
+      break;
+
+    case "subscription.renewed":
+    case "subscription.on_hold":
+      await manageSubscription(event);
+      break;
+
+    case "subscription.cancelled":
+    case "subscription.expired":
+    case "subscription.failed":
+      await manageSubscription(event);
+      await downgradeToHobbyPlan({
+        dodoCustomerId: event.data.customer.customer_id,
+      });
+      break;
+
+    default:
+      console.warn(`Unhandled event type: ${event.type}`);
+  }
+
+  return new Response(JSON.stringify({ success: true }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+});
+```
+
+### Payment Event Handler
+
+```ts
+async function managePayment(event: any) {
+  const data = {
+    payment_id: event.data.payment_id,
+    brand_id: event.data.brand_id,
+    created_at: event.data.created_at,
+    currency: event.data.currency,
+    metadata: event.data.metadata,
+    payment_method: event.data.payment_method,
+    payment_method_type: event.data.payment_method_type,
+    status: event.data.status,
+    subscription_id: event.data.subscription_id,
+    total_amount: event.data.total_amount,
+    customer_email: event.data.customer.email,
+    customer_name: event.data.customer.name,
+    customer_id: event.data.customer.customer_id,
+    webhook_data: event,
+    billing: event.data.billing,
+    card_last_four: event.data.card_last_four,
+    card_network: event.data.card_network,
+    card_type: event.data.card_type,
+    // ... more fields
+  };
+
+  const { error } = await supabase.from("payments").upsert(data, {
+    onConflict: "payment_id",
+  });
+
+  if (error) throw error;
+  console.log(`Payment ${data.payment_id} upserted successfully.`);
+}
+```
+
+### Subscription Event Handler
+
+```ts
+async function manageSubscription(event: any) {
+  const data = {
+    subscription_id: event.data.subscription_id,
+    addons: event.data.addons,
+    billing: event.data.billing,
+    cancel_at_next_billing_date: event.data.cancel_at_next_billing_date,
+    cancelled_at: event.data.cancelled_at,
+    created_at: event.data.created_at,
+    currency: event.data.currency,
+    customer_email: event.data.customer.email,
+    customer_name: event.data.customer.name,
+    customer_id: event.data.customer.customer_id,
+    next_billing_date: event.data.next_billing_date,
+    payment_frequency_count: event.data.payment_frequency_count,
+    payment_period_interval: event.data.payment_frequency_interval,
+    previous_billing_date: event.data.previous_billing_date,
+    product_id: event.data.product_id,
+    quantity: event.data.quantity,
+    status: event.data.status,
+    // ... more fields
+  };
+
+  const { error } = await supabase.from("subscriptions").upsert(data, {
+    onConflict: "subscription_id",
+  });
+
+  if (error) throw error;
+  console.log(`Subscription ${data.subscription_id} upserted successfully.`);
+}
+```
+
+### User Tier Updates
+
+When subscriptions become active, update the user's tier:
+
+```ts
+async function updateUserTier(props: {
+  dodoCustomerId: string;
+  subscriptionId: string;
+}) {
+  const { error } = await supabase
+    .from("users")
+    .update({ current_subscription_id: props.subscriptionId })
+    .eq("dodo_customer_id", props.dodoCustomerId);
+
+  if (error) throw error;
+  console.log(`User tier updated for customer ${props.dodoCustomerId}.`);
+}
+```
+
+### Subscription Cancellation Handling
+
+```ts
+async function downgradeToHobbyPlan(props: { dodoCustomerId: string }) {
+  const { error } = await supabase
+    .from("users")
+    .update({ current_subscription_id: null })
+    .eq("dodo_customer_id", props.dodoCustomerId);
+
+  if (error) throw error;
+  console.log(`User downgraded for customer ${props.dodoCustomerId}.`);
+}
+```
+
+## Webhook Events
+
+### Payment Events
+
+| Event | Description | Action |
+|-------|-------------|--------|
+| `payment.succeeded` | Payment completed successfully | Store payment record |
+| `payment.failed` | Payment failed | Store failure, notify user |
+| `payment.processing` | Payment being processed | Update status |
+| `payment.cancelled` | Payment was cancelled | Update status |
+
+### Subscription Events
+
+| Event | Description | Action |
+|-------|-------------|--------|
+| `subscription.active` | Subscription activated | Update user tier, grant access |
+| `subscription.plan_changed` | User changed plans | Update subscription, adjust billing |
+| `subscription.renewed` | Subscription renewed | Update next billing date |
+| `subscription.cancelled` | User cancelled | Schedule downgrade |
+| `subscription.expired` | Subscription ended | Remove access |
+| `subscription.failed` | Renewal payment failed | Put subscription on hold |
+| `subscription.on_hold` | Awaiting payment retry | Limited access |
+
+## Payment Methods
+
+Dodo Payments supports multiple payment methods:
+
+- Credit/Debit Cards (Visa, Mastercard, Amex)
+- Digital Wallets (Apple Pay, Google Pay)
+- Bank Transfers (ACH, SEPA)
+- Buy Now, Pay Later (Klarna, Afterpay)
+
+## Security
+
+- **PCI DSS Compliant**: All payment data is handled by Dodo Payments
+- **Webhook Signature Verification**: All webhooks are cryptographically signed
+- **Secure Checkout**: Hosted checkout pages with SSL/TLS encryption
+- **3D Secure**: Supports 3DS2 authentication for card payments
+
+## Testing
+
+Dodo Payments provides test mode for development:
+
+```bash .env.local
+DODO_PAYMENTS_ENVIRONMENT=test_mode
+DODO_PAYMENTS_API_KEY=your-test-api-key
+DODO_WEBHOOK_SECRET=your-test-webhook-secret
+```
+
+### Test Card Numbers
+
+| Card Number | Result |
+|-------------|--------|
+| 4242 4242 4242 4242 | Success |
+| 4000 0000 0000 0002 | Decline |
+| 4000 0000 0000 9995 | Insufficient funds |
+
+## Environment Variables
+
+```bash .env.example
+# Dodo Payments
+DODO_PAYMENTS_API_KEY=your-api-key
+DODO_PAYMENTS_ENVIRONMENT=test_mode # or live_mode
+DODO_WEBHOOK_SECRET=your-webhook-secret
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Invoice History" icon="receipt" href="/features/invoices">
+    View and download customer invoices
+  </Card>
+  <Card title="Dashboard Features" icon="grid" href="/features/dashboard">
+    Explore the full dashboard
+  </Card>
+</CardGroup>

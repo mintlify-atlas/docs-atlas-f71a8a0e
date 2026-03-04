@@ -1,0 +1,301 @@
+---
+title: 'Authentication'
+description: 'Learn how Google OAuth authentication works in the Dodo Supabase Subscription Starter'
+icon: 'shield-check'
+---
+
+## Overview
+
+The Dodo Starter kit implements secure authentication using **Google OAuth** via Supabase Auth. The authentication flow is streamlined and production-ready, handling user sign-in, session management, and automatic user creation.
+
+## Authentication Flow
+
+### 1. Google Sign-In Component
+
+The main authentication entry point is the `GoogleSignIn` component, which initiates the OAuth flow:
+
+```tsx components/auth/google-signin.tsx
+"use client";
+
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "../ui/button";
+import Image from "next/image";
+import { useState } from "react";
+import { LoaderCircle } from "lucide-react";
+
+export default function GoogleSignIn() {
+  const supabase = createClient();
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    setLoading(true);
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/api/auth/callback`,
+      },
+    });
+  };
+
+  return (
+    <Button
+      variant="outline"
+      className="flex flex-row gap-2 w-48 items-center justify-center rounded-xl"
+      onClick={handleLogin}
+    >
+      {loading ? (
+        <LoaderCircle className="size-4 animate-spin" />
+      ) : (
+        <Image src="/assets/google.png" alt="Google" width={16} height={16} />
+      )}
+      Continue with Google
+    </Button>
+  );
+}
+```
+
+**Key Features:**
+- Client-side Supabase client initialization
+- Loading state management during OAuth redirect
+- Custom redirect URL to handle the callback
+- Branded Google button with icon
+
+### 2. Login Page
+
+The login page checks for existing authentication and redirects authenticated users:
+
+```tsx app/login/page.tsx
+import { getUser } from "@/actions/get-user";
+import GoogleSignIn from "@/components/auth/google-signin";
+import { redirect } from "next/navigation";
+
+export default async function Page(props: {
+  searchParams: Promise<{
+    error?: string;
+  }>;
+}) {
+  const userRes = await getUser();
+  const { error } = await props.searchParams;
+
+  if (userRes.success && userRes.data) {
+    redirect("/dashboard");
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center h-screen px-4 gap-10">
+      <Header />
+      {error && (
+        <TailwindBadge variant="red" className="mt-20">
+          {error}
+        </TailwindBadge>
+      )}
+      <GoogleSignIn />
+    </div>
+  );
+}
+```
+
+### 3. OAuth Callback Handler
+
+After Google authenticates the user, Supabase redirects to the callback route:
+
+```ts app/api/auth/callback/route.ts
+import { createUser } from "@/actions/create-user";
+import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+
+export async function GET(request: Request) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get("code");
+
+  if (code) {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    
+    if (!error && data.session) {
+      await createUser();
+      return NextResponse.redirect(`${origin}/dashboard`);
+    } else {
+      return NextResponse.redirect(
+        `${origin}/login?error=${error?.message || "Could not authenticate"}`
+      );
+    }
+  }
+
+  return NextResponse.redirect(`${origin}/login?error=Unknown error`);
+}
+```
+
+**Callback Flow:**
+1. Extract the authorization code from the URL
+2. Exchange the code for a Supabase session
+3. Create the user record in the database
+4. Redirect to the dashboard or show an error
+
+## Supabase Client Configuration
+
+### Client-Side Client
+
+For browser-based authentication actions:
+
+```ts lib/supabase/client.ts
+import { createBrowserClient } from "@supabase/ssr";
+
+export const createClient = () =>
+  createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+```
+
+### Server-Side Client
+
+For server actions and API routes with cookie-based session management:
+
+```ts lib/supabase/server.ts
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+
+export async function createClient() {
+  const cookieStore = await cookies();
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            // The `setAll` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing
+            // user sessions.
+          }
+        },
+      },
+    }
+  );
+}
+```
+
+## User Creation Flow
+
+When a user successfully authenticates, the system creates their user record and Dodo Payments customer:
+
+```ts actions/create-user.ts
+export async function createUser(): ServerActionRes<string> {
+  const userRes = await getUser();
+
+  if (!userRes.success) {
+    return { success: false, error: "User not found" };
+  }
+
+  const user = userRes.data;
+
+  // Check if user already exists
+  const existingUser = await db.query.users.findFirst({
+    where: eq(users.supabaseUserId, user.id),
+  });
+
+  if (existingUser) {
+    return { success: true, data: "User already exists" };
+  }
+
+  // Create Dodo Payments customer
+  const dodoCustomerRes = await createDodoCustomer({
+    email: user.email!,
+    name: user.user_metadata.name,
+  });
+
+  if (!dodoCustomerRes.success) {
+    return { success: false, error: "Failed to create customer" };
+  }
+
+  // Insert user into database
+  await db.insert(users).values({
+    supabaseUserId: user.id,
+    dodoCustomerId: dodoCustomerRes.data.customer_id,
+    currentSubscriptionId: "",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  return { success: true, data: "User created" };
+}
+```
+
+**The user creation process:**
+1. Retrieves the authenticated Supabase user
+2. Checks if a user record already exists
+3. Creates a Dodo Payments customer for billing
+4. Inserts the user record linking Supabase and Dodo IDs
+
+## Sign Out
+
+Users can sign out from the account management section:
+
+```tsx
+const handleSignOut = async () => {
+  const supabase = createClient();
+  await supabase.auth.signOut();
+  window.location.reload();
+};
+```
+
+## Session Management
+
+The starter kit uses cookie-based session management through Supabase SSR:
+
+- Sessions are stored in HTTP-only cookies
+- Automatic session refresh on page navigation
+- Server-side session validation for protected routes
+
+## Protected Routes
+
+The dashboard and other protected pages check authentication status:
+
+```tsx app/dashboard/page.tsx
+export default async function DashboardPage() {
+  const userRes = await getUser();
+  
+  if (!userRes.success) {
+    redirect("/login");
+  }
+
+  // Render protected content
+}
+```
+
+## Environment Variables
+
+Required environment variables for authentication:
+
+```bash .env.example
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+## Security Features
+
+- **OAuth 2.0**: Industry-standard authentication protocol
+- **HTTP-Only Cookies**: Session tokens are not accessible via JavaScript
+- **PKCE Flow**: Enhanced security for the authorization code exchange
+- **Server-Side Validation**: All protected routes validate sessions server-side
+- **Automatic Session Refresh**: Sessions are refreshed automatically before expiration
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dashboard Features" icon="grid" href="/features/dashboard">
+    Explore the authenticated user dashboard
+  </Card>
+  <Card title="Subscription Management" icon="credit-card" href="/features/subscriptions">
+    Learn about subscription features
+  </Card>
+</CardGroup>

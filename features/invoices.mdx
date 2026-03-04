@@ -1,0 +1,447 @@
+---
+title: 'Invoice History'
+description: 'View, track, and download customer invoices with detailed payment information'
+icon: 'receipt'
+---
+
+## Overview
+
+The Dodo Starter kit includes a comprehensive invoice management system that tracks all payments, displays payment methods, and allows users to download invoices.
+
+## Invoice History Component
+
+The invoice history component displays a table of all user payments:
+
+```tsx components/dashboard/invoice-history.tsx
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { CalendarDays, Download, ReceiptText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SelectPayment } from "@/lib/drizzle/schema";
+import TailwindBadge from "../ui/tailwind-badge";
+
+export function InvoiceHistory({
+  invoices,
+}: InvoiceHistoryProps) {
+  function getStatusBadge(status: string) {
+    const isSuccess = status === "succeeded";
+    return (
+      <TailwindBadge variant={isSuccess ? "green" : "red"}>
+        {isSuccess ? "Paid" : "Failed"}
+      </TailwindBadge>
+    );
+  }
+
+  function getPaymentMethodLogo(network: string | null) {
+    if (!network) {
+      return (
+        <div className="flex h-6 w-10 items-center justify-center rounded bg-gray-200">
+          <CreditCard className="h-4 w-4 text-gray-600" />
+        </div>
+      );
+    }
+
+    switch (network.toUpperCase()) {
+      case "VISA":
+        return (
+          <Image src="/assets/visa.svg" alt="Visa" width={32} height={32} />
+        );
+      case "MASTERCARD":
+      case "MASTER":
+        return (
+          <Image src="/assets/mc.jpg" alt="Mastercard" width={32} height={32} />
+        );
+      case "AMEX":
+      case "AMERICAN_EXPRESS":
+        return (
+          <Image src="/assets/amex.png" alt="Amex" width={32} height={32} />
+        );
+      default:
+        return (
+          <div className="flex h-6 w-10 items-center justify-center rounded bg-gray-200">
+            <CreditCard className="h-4 w-4 text-gray-600" />
+          </div>
+        );
+    }
+  }
+
+  return (
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ReceiptText className="h-5 w-5 text-primary" />
+          Invoice History
+        </CardTitle>
+        <CardDescription>
+          Your past invoices and payment receipts.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+              <TableHead className="text-right">Status</TableHead>
+              <TableHead className="text-right">Payment Method</TableHead>
+              <TableHead className="text-right">Invoice</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {invoices.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="h-24 text-center text-muted-foreground"
+                >
+                  No invoices yet
+                </TableCell>
+              </TableRow>
+            )}
+            {invoices.map((inv) => (
+              <TableRow key={inv.paymentId} className="group">
+                <TableCell className="text-muted-foreground">
+                  <div className="inline-flex items-center gap-2">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {new Date(inv.createdAt).toLocaleDateString("en-US", {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                      hour: "numeric",
+                      minute: "numeric",
+                      hour12: true,
+                    })}
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  {inv.currency === "USD"
+                    ? "$"
+                    : inv.currency === "INR"
+                    ? "₹"
+                    : `${inv.currency} `}
+                  {Number(inv.totalAmount) / 100}
+                </TableCell>
+                <TableCell className="text-right">
+                  {getStatusBadge(inv.status)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {inv.cardNetwork && inv.cardLastFour ? (
+                    <span className="font-medium flex items-center justify-end gap-2">
+                      {getPaymentMethodLogo(inv.cardNetwork)} {inv.cardLastFour}
+                    </span>
+                  ) : (
+                    <span className="font-medium">
+                      {inv.paymentMethod || "N/A"}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={() => {
+                      const url =
+                        process.env.DODO_PAYMENTS_ENVIRONMENT === "live_mode"
+                          ? "https://live.dodopayments.com"
+                          : "https://test.dodopayments.com";
+                      window.open(
+                        `${url}/invoices/payments/${inv.paymentId}`,
+                        "_blank"
+                      );
+                    }}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+## Get Invoices Action
+
+The server action retrieves all invoices for the current user:
+
+```ts actions/get-invoices.ts
+import { db } from "@/lib/drizzle/client";
+import { getUserSubscription } from "./get-user-subscription";
+import { payments, SelectPayment } from "@/lib/drizzle/schema";
+import { eq } from "drizzle-orm";
+import { ServerActionRes } from "@/types/server-action";
+
+export async function getInvoices(): ServerActionRes<SelectPayment[]> {
+  try {
+    const subscriptionRes = await getUserSubscription();
+
+    if (!subscriptionRes.success) {
+      return { success: false, error: "Subscription not found" };
+    }
+
+    const invoices = await db.query.payments.findMany({
+      where: eq(payments.customerId, subscriptionRes.data.user.dodoCustomerId),
+    });
+
+    return { success: true, data: invoices };
+  } catch (error) {
+    return { success: false, error: "Failed to get invoices" };
+  }
+}
+```
+
+**Invoice Retrieval:**
+1. Get the current user's subscription details
+2. Query all payments associated with the user's Dodo customer ID
+3. Return the complete invoice history
+
+## Invoice Data Structure
+
+Each invoice contains comprehensive payment information:
+
+```typescript
+interface SelectPayment {
+  paymentId: string;
+  brandId: string;
+  createdAt: string;
+  currency: string;
+  metadata: any;
+  paymentMethod: string;
+  paymentMethodType: string;
+  status: string;
+  subscriptionId: string;
+  totalAmount: string;
+  customerEmail: string;
+  customerName: string;
+  customerId: string;
+  billing: any;
+  businessId: string;
+  cardIssuingCountry: string | null;
+  cardLastFour: string | null;
+  cardNetwork: string | null;
+  cardType: string | null;
+  discountId: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  settlementAmount: string | null;
+  settlementCurrency: string | null;
+  tax: string | null;
+  updatedAt: string;
+}
+```
+
+## Payment Method Display
+
+The component displays branded payment method logos:
+
+### Card Network Detection
+
+```tsx
+function getPaymentMethodLogo(network: string | null) {
+  switch (network?.toUpperCase()) {
+    case "VISA":
+      return <Image src="/assets/visa.svg" alt="Visa" width={32} height={32} />;
+    case "MASTERCARD":
+    case "MASTER":
+      return <Image src="/assets/mc.jpg" alt="Mastercard" width={32} height={32} />;
+    case "AMEX":
+    case "AMERICAN_EXPRESS":
+      return <Image src="/assets/amex.png" alt="Amex" width={32} height={32} />;
+    default:
+      return <CreditCard className="h-4 w-4" />;
+  }
+}
+```
+
+**Supported Card Networks:**
+- Visa
+- Mastercard
+- American Express
+- Generic fallback for other cards
+
+## Payment Status Badges
+
+Visual status indicators show payment state:
+
+```tsx
+function getStatusBadge(status: string) {
+  const isSuccess = status === "succeeded";
+  return (
+    <TailwindBadge variant={isSuccess ? "green" : "red"}>
+      {isSuccess ? "Paid" : "Failed"}
+    </TailwindBadge>
+  );
+}
+```
+
+| Status | Badge Color | Display |
+|--------|-------------|----------|
+| `succeeded` | Green | Paid |
+| `failed` | Red | Failed |
+| `processing` | Yellow | Processing |
+| `cancelled` | Gray | Cancelled |
+
+## Download Invoices
+
+Users can download PDF invoices hosted by Dodo Payments:
+
+```tsx
+<Button
+  variant="outline"
+  size="sm"
+  onClick={() => {
+    const url =
+      process.env.DODO_PAYMENTS_ENVIRONMENT === "live_mode"
+        ? "https://live.dodopayments.com"
+        : "https://test.dodopayments.com";
+    window.open(
+      `${url}/invoices/payments/${inv.paymentId}`,
+      "_blank"
+    );
+  }}
+>
+  <Download className="h-3.5 w-3.5" />
+  Download
+</Button>
+```
+
+**Invoice URL Structure:**
+- Test mode: `https://test.dodopayments.com/invoices/payments/{paymentId}`
+- Live mode: `https://live.dodopayments.com/invoices/payments/{paymentId}`
+
+## Currency Formatting
+
+The component supports multiple currencies:
+
+```tsx
+{inv.currency === "USD"
+  ? "$"
+  : inv.currency === "INR"
+  ? "₹"
+  : `${inv.currency} `}
+{Number(inv.totalAmount) / 100}
+```
+
+**Supported Currencies:**
+- USD ($) - US Dollar
+- EUR (€) - Euro
+- GBP (£) - British Pound
+- INR (₹) - Indian Rupee
+- And more (displayed with currency code)
+
+## Date Formatting
+
+Invoice dates are formatted with full timestamp:
+
+```tsx
+new Date(inv.createdAt).toLocaleDateString("en-US", {
+  month: "long",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "numeric",
+  hour12: true,
+})
+// Output: "March 4, 2026, 3:45 PM"
+```
+
+## Empty State
+
+When no invoices exist, a helpful message is displayed:
+
+```tsx
+{invoices.length === 0 && (
+  <TableRow>
+    <TableCell
+      colSpan={5}
+      className="h-24 text-center text-muted-foreground"
+    >
+      No invoices yet
+    </TableCell>
+  </TableRow>
+)}
+```
+
+## Webhook Integration
+
+Invoices are automatically created and updated via webhooks:
+
+```ts supabase/functions/dodo-webhook/index.ts
+case "payment.succeeded":
+case "payment.failed":
+case "payment.processing":
+case "payment.cancelled":
+  await managePayment(event);
+  break;
+
+async function managePayment(event: any) {
+  const data = {
+    payment_id: event.data.payment_id,
+    created_at: event.data.created_at,
+    currency: event.data.currency,
+    status: event.data.status,
+    total_amount: event.data.total_amount,
+    customer_id: event.data.customer.customer_id,
+    card_last_four: event.data.card_last_four,
+    card_network: event.data.card_network,
+    // ... more fields
+  };
+
+  await supabase.from("payments").upsert(data, {
+    onConflict: "payment_id",
+  });
+}
+```
+
+**Automatic Updates:**
+- New payments are automatically added
+- Payment status updates are synced in real-time
+- Card details are captured for display
+- Full webhook data is stored for reference
+
+## Invoice Features
+
+<CardGroup cols={2}>
+  <Card title="Payment Details" icon="money-bill">
+    Amount, currency, date, and status for each transaction
+  </Card>
+  <Card title="Card Information" icon="credit-card">
+    Card network logos and last 4 digits
+  </Card>
+  <Card title="PDF Download" icon="download">
+    Download official invoices from Dodo Payments
+  </Card>
+  <Card title="Real-time Sync" icon="sync">
+    Automatic updates via webhooks
+  </Card>
+</CardGroup>
+
+## Responsive Design
+
+The invoice table is fully responsive:
+
+- **Mobile**: Scrollable table with compact layout
+- **Tablet**: Optimized column widths
+- **Desktop**: Full table with all details visible
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Payment Processing" icon="money-bill-wave" href="/features/payments">
+    Learn about the payment flow
+  </Card>
+  <Card title="Dashboard Overview" icon="grid" href="/features/dashboard">
+    Explore all dashboard features
+  </Card>
+</CardGroup>

@@ -1,0 +1,242 @@
+---
+title: "Deploy to Vercel"
+description: "Deploy your Dodo Supabase Subscription Starter to Vercel in minutes"
+---
+
+## Quick Deploy
+
+The fastest way to deploy this project is using the Vercel deployment button:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/dodopayments/dodo-supabase-subscription-starter&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,DATABASE_URL,DODO_PAYMENTS_API_KEY,DODO_WEBHOOK_SECRET,DODO_PAYMENTS_ENVIRONMENT)
+
+This will clone the repository to your GitHub account and deploy it to Vercel automatically.
+
+## Prerequisites
+
+Before deploying to Vercel, ensure you have:
+
+- A [Vercel account](https://vercel.com/signup)
+- A [Supabase project](https://app.supabase.com) with database configured
+- A [Dodo Payments account](https://dashboard.dodopayments.com) with API keys
+- Google OAuth configured in your Supabase project
+- Database schema deployed (run `bun run db:push` locally first)
+
+## Manual Deployment Steps
+
+### 1. Install Vercel CLI (Optional)
+
+```bash
+npm i -g vercel
+# or
+bun add -g vercel
+```
+
+### 2. Connect Your Repository
+
+1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+2. Click "Add New..." → "Project"
+3. Import your Git repository
+4. Select the repository containing your starter kit
+
+### 3. Configure Environment Variables
+
+In the Vercel project settings, add all required environment variables. See the [Environment Variables](/deployment/environment-variables) page for complete details.
+
+Required variables:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `DATABASE_URL`
+- `DODO_PAYMENTS_API_KEY`
+- `DODO_WEBHOOK_SECRET`
+- `DODO_PAYMENTS_ENVIRONMENT`
+
+### 4. Deploy
+
+Click "Deploy" and Vercel will:
+
+- Build your Next.js application
+- Deploy to a production URL
+- Set up automatic deployments for future pushes
+
+### 5. Configure OAuth Redirect URLs
+
+After deployment, update your OAuth provider settings:
+
+**Google OAuth (in Google Cloud Console):**
+
+Add these authorized redirect URIs:
+
+```
+https://your-vercel-domain.vercel.app/api/auth/callback/google
+https://[your-project-ref].supabase.co/auth/v1/callback
+```
+
+**Supabase (in Authentication Settings):**
+
+Add your production URL to the allowed redirect URLs:
+
+```
+https://your-vercel-domain.vercel.app/**
+```
+
+### 6. Update Webhook URL
+
+In your Dodo Payments dashboard, update the webhook endpoint to use your production URL:
+
+```
+https://[your-project-ref].supabase.co/functions/v1/dodo-webhook
+```
+
+Ensure all subscription and payment events are selected.
+
+## Build Configuration
+
+The starter kit uses the default Next.js build configuration. No custom Vercel configuration is needed.
+
+### Build Command
+
+```bash
+next build --turbopack
+```
+
+### Output Directory
+
+```
+.next
+```
+
+### Install Command
+
+```bash
+bun install
+# or
+npm install
+```
+
+## Environment-Specific Settings
+
+### Development vs Production
+
+Make sure to use the correct environment settings:
+
+**Development:**
+```env
+DODO_PAYMENTS_ENVIRONMENT=test_mode
+```
+
+**Production:**
+```env
+DODO_PAYMENTS_ENVIRONMENT=live_mode
+```
+
+<Warning>
+  Always use `test_mode` during development to avoid processing real payments. Switch to `live_mode` only after thorough testing.
+</Warning>
+
+## Deployment Checklist
+
+Before deploying to production:
+
+- [ ] All environment variables are set correctly
+- [ ] Database schema is deployed to Supabase
+- [ ] Webhook function is deployed to Supabase
+- [ ] Google OAuth is configured with production URLs
+- [ ] Dodo Payments webhook URL is updated
+- [ ] Products are created in Dodo Payments dashboard
+- [ ] Test a complete user flow (signup, subscribe, webhook processing)
+- [ ] Switch to `live_mode` for Dodo Payments
+
+See the [Production Checklist](/deployment/production-checklist) for a comprehensive pre-launch guide.
+
+## Automatic Deployments
+
+Vercel automatically deploys:
+
+- **Production**: Every push to your main/master branch
+- **Preview**: Every push to pull requests and other branches
+
+You can customize this behavior in your Vercel project settings under "Git" → "Deploy Hooks".
+
+## Troubleshooting
+
+### Build Fails
+
+**Check build logs** in the Vercel dashboard for specific errors.
+
+Common issues:
+- Missing environment variables
+- TypeScript errors
+- Dependency installation failures
+
+### Authentication Not Working
+
+**Verify OAuth redirect URLs** are correctly configured in:
+- Google Cloud Console
+- Supabase Authentication settings
+- Include both development and production URLs
+
+### Webhooks Not Received
+
+**Check webhook configuration:**
+- Webhook URL is correct in Dodo Payments dashboard
+- Webhook secret matches your environment variable
+- Supabase function is deployed (verify in Supabase dashboard)
+- Function logs show incoming requests
+
+### Database Connection Issues
+
+**Verify DATABASE_URL:**
+- Format: `postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres`
+- Password is URL-encoded if it contains special characters
+- Supabase project is active and accessible
+
+## Performance Optimization
+
+### Edge Functions
+
+Vercel deploys your Next.js application to the Edge by default, ensuring low latency globally.
+
+### Caching Strategy
+
+The starter kit uses Next.js 15's built-in caching mechanisms:
+
+- Static pages are cached at the CDN
+- API routes use appropriate cache headers
+- Supabase responses are cached when appropriate
+
+### Database Connection Pooling
+
+Supabase automatically handles connection pooling. No additional configuration needed.
+
+## Monitoring
+
+### Vercel Analytics
+
+Enable Vercel Analytics to monitor:
+- Page load times
+- Core Web Vitals
+- User sessions
+
+### Supabase Logs
+
+Monitor webhook processing in:
+- Supabase Dashboard → Functions → dodo-webhook → Logs
+
+### Dodo Payments Dashboard
+
+Track payment and subscription events in your Dodo Payments dashboard.
+
+## Scaling Considerations
+
+The starter kit is built to scale:
+
+- **Serverless architecture**: Automatically scales with traffic
+- **Edge deployment**: Low latency worldwide
+- **Connection pooling**: Efficient database connections
+- **Managed services**: Supabase and Vercel handle infrastructure
+
+<Note>
+  For high-traffic applications, consider upgrading your Vercel and Supabase plans to ensure adequate resources.
+</Note>

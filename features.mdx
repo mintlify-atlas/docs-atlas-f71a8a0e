@@ -1,0 +1,357 @@
+---
+title: "Key Features"
+description: "Comprehensive overview of all features included in the Dodo Supabase Subscription Starter"
+---
+
+The Dodo Supabase Subscription Starter is a production-ready boilerplate that combines authentication, payments, and subscription management into a single, cohesive solution.
+
+## Authentication
+
+### Google OAuth Integration
+
+Seamless authentication powered by Supabase Auth with Google OAuth provider.
+
+<CardGroup cols={2}>
+  <Card title="Browser Client" icon="browser">
+    Client-side authentication using `@supabase/ssr`
+    ```typescript
+    import { createBrowserClient } from "@supabase/ssr";
+
+    export const createClient = () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+    ```
+  </Card>
+  <Card title="Server Client" icon="server">
+    Server-side authentication with cookie management
+    ```typescript
+    import { createServerClient } from "@supabase/ssr";
+
+    export async function createClient() {
+      const cookieStore = await cookies();
+      return createServerClient(...);
+    }
+    ```
+  </Card>
+</CardGroup>
+
+<Note>
+  Users are automatically redirected to `/dashboard` after successful authentication. The authentication flow is handled entirely through server actions for enhanced security.
+</Note>
+
+### User Management
+
+Automatic user creation and synchronization between Supabase Auth and your database:
+
+```typescript
+const users = pgTable("users", {
+  supabaseUserId: text("supabase_user_id").primaryKey(),
+  dodoCustomerId: text("dodo_customer_id").notNull(),
+  currentSubscriptionId: text("current_subscription_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
+});
+```
+
+## Payment Processing
+
+### Dodo Payments Integration
+
+Complete subscription lifecycle management through Dodo Payments API.
+
+```typescript
+import DodoPayments from "dodopayments";
+
+export const dodoClient = new DodoPayments({
+  bearerToken: process.env.DODO_PAYMENTS_API_KEY!,
+  environment: process.env.DODO_PAYMENTS_ENVIRONMENT!
+});
+```
+
+### Supported Payment Operations
+
+<CardGroup cols={3}>
+  <Card title="Subscribe" icon="credit-card">
+    Create new subscriptions with automatic customer creation
+  </Card>
+  <Card title="Change Plans" icon="arrows-rotate">
+    Seamlessly upgrade or downgrade between subscription tiers
+  </Card>
+  <Card title="Cancel" icon="xmark">
+    Cancel subscriptions at the next billing date or immediately
+  </Card>
+  <Card title="Restore" icon="arrow-rotate-left">
+    Restore cancelled subscriptions before the end date
+  </Card>
+  <Card title="Invoice History" icon="file-invoice">
+    View complete payment history with detailed billing information
+  </Card>
+  <Card title="Payment Methods" icon="wallet">
+    Manage credit cards and payment preferences
+  </Card>
+</CardGroup>
+
+## Dynamic Product Management
+
+### Metadata-Driven Features
+
+Products are configured in Dodo Payments dashboard with feature lists stored in metadata:
+
+```json
+{
+  "features": [
+    "Unlimited projects",
+    "Priority support",
+    "Advanced analytics",
+    "API access"
+  ]
+}
+```
+
+The application automatically extracts and displays these features in the pricing UI:
+
+```typescript
+const features = JSON.parse(
+  currentPlanDetails?.metadata.features || "[]"
+);
+```
+
+### Free Tier Support
+
+Built-in free plan configuration for users without active subscriptions:
+
+```typescript
+export const freePlan = {
+  name: "Hobby Plan",
+  description: "Free plan for Dodo Supabase subscription starter",
+  price: 0,
+  features: [
+    "Access to basic tools",
+    "Single user support",
+    "5 projects limit",
+    "Community support",
+    "Basic analytics"
+  ]
+};
+```
+
+## Webhook Integration
+
+### Real-Time Event Processing
+
+Supabase Edge Function handles webhook events from Dodo Payments:
+
+```typescript
+// Webhook verification
+const webhook = new Webhook(dodoWebhookSecret);
+await webhook.verify(rawBody, webhookHeaders);
+
+// Event routing
+switch (event.type) {
+  case "payment.succeeded":
+  case "payment.failed":
+    await managePayment(event);
+    break;
+  case "subscription.active":
+  case "subscription.plan_changed":
+    await manageSubscription(event);
+    await updateUserTier(event.data);
+    break;
+  case "subscription.cancelled":
+  case "subscription.expired":
+    await manageSubscription(event);
+    await downgradeToHobbyPlan(event.data);
+    break;
+}
+```
+
+### Supported Events
+
+<Accordion title="Payment Events">
+  - `payment.succeeded` - Payment completed successfully
+  - `payment.failed` - Payment failed or declined
+  - `payment.processing` - Payment is being processed
+  - `payment.cancelled` - Payment was cancelled
+</Accordion>
+
+<Accordion title="Subscription Events">
+  - `subscription.active` - Subscription activated
+  - `subscription.plan_changed` - User changed subscription plan
+  - `subscription.renewed` - Subscription renewed for next period
+  - `subscription.cancelled` - Subscription cancelled by user
+  - `subscription.expired` - Subscription ended
+  - `subscription.failed` - Subscription payment failed
+  - `subscription.on_hold` - Subscription temporarily paused
+</Accordion>
+
+<Warning>
+  Webhook secrets must be configured in both Dodo Payments dashboard and your Supabase environment variables for secure event verification.
+</Warning>
+
+## Database Management
+
+### Drizzle ORM Schema
+
+Type-safe database operations with PostgreSQL:
+
+<CodeGroup>
+```typescript lib/drizzle/schema.ts
+export const subscriptions = pgTable("subscriptions", {
+  subscriptionId: text("subscription_id").primaryKey(),
+  userId: text("user_id").references(() => users.supabaseUserId),
+  recurringPreTaxAmount: real("recurring_pre_tax_amount").notNull(),
+  status: text("status").notNull(),
+  productId: text("product_id").notNull(),
+  nextBillingDate: timestamp("next_billing_date"),
+  cancelAtNextBillingDate: boolean("cancel_at_next_billing_date"),
+  metadata: jsonb("metadata"),
+  billing: jsonb("billing").notNull(),
+});
+```
+
+```typescript lib/drizzle/schema.ts
+export const payments = pgTable("payments", {
+  paymentId: text("payment_id").primaryKey(),
+  status: text("status").notNull(),
+  totalAmount: real("total_amount").notNull(),
+  currency: text("currency").notNull(),
+  subscriptionId: text("subscription_id").notNull(),
+  customerId: text("customer_id").notNull(),
+  createdAt: timestamp("created_at"),
+  webhookData: jsonb("webhook_data").notNull(),
+});
+```
+</CodeGroup>
+
+### Database Operations
+
+```bash
+# Push schema changes to Supabase
+bun run db:push
+
+# Open Drizzle Studio for database management
+bun run db:studio
+
+# Generate migrations
+bun run db:generate
+```
+
+## Modern UI Components
+
+### Tech Stack
+
+<CardGroup cols={2}>
+  <Card title="Next.js 15" icon="react">
+    Latest Next.js with App Router and Server Components
+  </Card>
+  <Card title="React 19" icon="react">
+    Cutting-edge React features including concurrent rendering
+  </Card>
+  <Card title="Tailwind CSS 4" icon="palette">
+    Modern utility-first CSS framework
+  </Card>
+  <Card title="Radix UI" icon="cube">
+    Accessible component primitives
+  </Card>
+</CardGroup>
+
+### Component Library
+
+- **shadcn/ui**: Pre-built, customizable components
+- **Lucide Icons**: Beautiful, consistent icon set
+- **next-themes**: Dark mode support with theme switching
+- **Sonner**: Elegant toast notifications
+- **Motion**: Advanced animations and transitions
+
+## Comprehensive Dashboard
+
+### Dashboard Features
+
+<Steps>
+  <Step title="Subscription Overview">
+    View current plan, billing cycle, and next payment date
+  </Step>
+  <Step title="Plan Management">
+    Upgrade, downgrade, or cancel subscriptions with real-time updates
+  </Step>
+  <Step title="Invoice History">
+    Complete payment history with downloadable invoices
+  </Step>
+  <Step title="Account Management">
+    Profile settings and account deletion
+  </Step>
+</Steps>
+
+### Server Actions
+
+All dashboard operations use Next.js server actions for security:
+
+```typescript
+"use server";
+
+export async function getUser(): ServerActionRes<User> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    return { success: false, error: "User not found" };
+  }
+  
+  return { success: true, data: user };
+}
+```
+
+## Developer Experience
+
+### Quick Start Scripts
+
+```bash
+# Development with Turbopack
+bun run dev
+
+# Production build
+bun run build
+
+# Type checking
+bun run typecheck
+
+# Deploy webhook function
+bun run deploy:webhook --project-ref YOUR_PROJECT
+```
+
+### Environment Configuration
+
+<CodeGroup>
+```bash .env.local
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Database
+DATABASE_URL=postgresql://postgres:password@db.project.supabase.co:5432/postgres
+
+# Dodo Payments
+DODO_PAYMENTS_API_KEY=your-api-key
+DODO_WEBHOOK_SECRET=your-webhook-secret
+DODO_PAYMENTS_ENVIRONMENT=test_mode
+```
+</CodeGroup>
+
+### Type Safety
+
+Full TypeScript support with auto-generated types:
+
+```typescript
+export type SelectUser = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+
+export type SelectSubscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;
+```
+
+<Note>
+  All database operations are type-safe, with TypeScript interfaces automatically inferred from the Drizzle schema.
+</Note>

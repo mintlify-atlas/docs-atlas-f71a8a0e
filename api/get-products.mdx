@@ -1,0 +1,222 @@
+---
+title: 'getProducts'
+description: 'Retrieves all available subscription products from Dodo Payments'
+---
+
+## Overview
+
+The `getProducts` function fetches all available subscription products from Dodo Payments. This is typically used to display pricing plans and available products to users.
+
+## Function Signature
+
+```typescript
+export async function getProducts(): ServerActionRes<ProductListResponse[]>
+```
+
+## Parameters
+
+This function does not accept any parameters.
+
+## Return Value
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the operation was successful
+</ResponseField>
+
+<ResponseField name="data" type="ProductListResponse[]">
+  An array of product objects from Dodo Payments:
+  
+  <ResponseField name="product_id" type="string">
+    Unique product identifier
+  </ResponseField>
+  
+  <ResponseField name="name" type="string">
+    Product name
+  </ResponseField>
+  
+  <ResponseField name="description" type="string">
+    Product description
+  </ResponseField>
+  
+  <ResponseField name="price" type="number">
+    Product price
+  </ResponseField>
+  
+  <ResponseField name="currency" type="string">
+    Currency code (e.g., "USD", "EUR")
+  </ResponseField>
+  
+  <ResponseField name="interval" type="string">
+    Billing interval (e.g., "month", "year")
+  </ResponseField>
+  
+  <ResponseField name="interval_count" type="number">
+    Number of intervals between billings
+  </ResponseField>
+  
+  And other Dodo Payments product fields...
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the operation failed:
+  - "Failed to fetch products" - API call to Dodo Payments failed
+</ResponseField>
+
+## Implementation Details
+
+The function:
+
+1. Calls the Dodo Payments API via `dodoClient.products.list()`
+2. Extracts the items array from the response
+3. Returns the list of products
+4. Catches and handles any API errors
+
+## Error Handling
+
+- Returns `{ success: false, error: "Failed to fetch products" }` if the API call fails
+- All exceptions are caught and converted to structured error responses
+- Safe to use in Server Components without additional error boundaries
+
+## Usage Example
+
+```typescript
+import { getProducts } from '@/actions/get-products';
+
+export default async function PricingPage() {
+  const result = await getProducts();
+
+  if (!result.success) {
+    return <div>Error loading products: {result.error}</div>;
+  }
+
+  const products = result.data;
+
+  return (
+    <div>
+      <h1>Pricing Plans</h1>
+      <div className="grid grid-cols-3 gap-4">
+        {products.map((product) => (
+          <div key={product.product_id} className="border p-4 rounded">
+            <h2>{product.name}</h2>
+            <p>{product.description}</p>
+            <p className="text-2xl font-bold">
+              {product.price} {product.currency}/{product.interval}
+            </p>
+            <button>Subscribe</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+## Filtering Products by Type
+
+```typescript
+import { getProducts } from '@/actions/get-products';
+
+export async function getMonthlyProducts() {
+  const result = await getProducts();
+  
+  if (!result.success) {
+    return [];
+  }
+  
+  return result.data.filter(product => product.interval === 'month');
+}
+
+export async function getAnnualProducts() {
+  const result = await getProducts();
+  
+  if (!result.success) {
+    return [];
+  }
+  
+  return result.data.filter(product => product.interval === 'year');
+}
+```
+
+## Client Component Example
+
+```typescript
+'use client';
+
+import { getProducts } from '@/actions/get-products';
+import { useEffect, useState } from 'react';
+
+export function ProductSelector() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    getProducts().then(result => {
+      if (result.success) {
+        setProducts(result.data);
+      } else {
+        setError(result.error);
+      }
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return <div>Loading products...</div>;
+  if (error) return <div>Error: {error}</div>;
+
+  return (
+    <select>
+      <option value="">Select a plan</option>
+      {products.map((product) => (
+        <option key={product.product_id} value={product.product_id}>
+          {product.name} - {product.price} {product.currency}/{product.interval}
+        </option>
+      ))}
+    </select>
+  );
+}
+```
+
+## Displaying Products with Features
+
+```typescript
+import { getProducts } from '@/actions/get-products';
+
+export default async function PricingGrid() {
+  const result = await getProducts();
+
+  if (!result.success) {
+    return <div>Unable to load pricing</div>;
+  }
+
+  const products = result.data;
+
+  return (
+    <div className="pricing-grid">
+      {products.map((product) => (
+        <div key={product.product_id} className="pricing-card">
+          <h3>{product.name}</h3>
+          <p className="description">{product.description}</p>
+          <div className="price">
+            <span className="amount">{product.price}</span>
+            <span className="currency">{product.currency}</span>
+            <span className="interval">/ {product.interval}</span>
+          </div>
+          <a href={`/subscribe?product=${product.product_id}`}>
+            Get Started
+          </a>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Related Actions
+
+- [`changePlan`](/api/change-plan) - Changes to a different product/plan
+- [`getUserSubscription`](/api/get-user-subscription) - Gets current subscription details
+
+## Source Code
+
+Location: `actions/get-products.ts:7`

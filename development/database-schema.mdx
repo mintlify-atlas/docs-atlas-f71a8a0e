@@ -1,0 +1,329 @@
+---
+title: "Database Schema"
+description: "Complete database schema documentation with table definitions and relationships"
+---
+
+## Overview
+
+The database schema is defined using Drizzle ORM in `lib/drizzle/schema.ts`. It consists of three main tables: users, subscriptions, and payments, with proper relationships and type safety.
+
+## Tables
+
+### Users Table
+
+Stores user account information linking Supabase authentication with Dodo Payments customers.
+
+```typescript
+export const users = pgTable("users", {
+  supabaseUserId: text("supabase_user_id").primaryKey(),
+  dodoCustomerId: text("dodo_customer_id").notNull(),
+  currentSubscriptionId: text("current_subscription_id"),
+  createdAt: timestamp("created_at", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  updatedAt: timestamp("updated_at", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  deletedAt: timestamp("deleted_at", {
+    mode: "string",
+    withTimezone: true,
+  }),
+});
+```
+
+#### Fields
+
+- **supabaseUserId** (text, PRIMARY KEY)
+  - Links to Supabase Auth user ID
+  - Unique identifier for each user
+
+- **dodoCustomerId** (text, NOT NULL)
+  - Customer ID from Dodo Payments
+  - Used for payment operations
+
+- **currentSubscriptionId** (text, nullable)
+  - References active subscription
+  - Null for free tier users
+
+- **createdAt** (timestamp with timezone, NOT NULL)
+  - Account creation timestamp
+  - Stored as ISO string
+
+- **updatedAt** (timestamp with timezone, NOT NULL)
+  - Last account update timestamp
+
+- **deletedAt** (timestamp with timezone, nullable)
+  - Soft delete timestamp
+  - Null for active accounts
+
+### Subscriptions Table
+
+Stores complete subscription details synced from Dodo Payments webhooks.
+
+```typescript
+export const subscriptions = pgTable("subscriptions", {
+  subscriptionId: text("subscription_id").primaryKey().notNull(),
+  userId: text("user_id").references(() => users.supabaseUserId),
+  recurringPreTaxAmount: real("recurring_pre_tax_amount").notNull(),
+  taxInclusive: boolean("tax_inclusive").notNull(),
+  currency: text("currency").notNull(),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  productId: text("product_id").notNull(),
+  quantity: integer("quantity").notNull(),
+  trialPeriodDays: integer("trial_period_days"),
+  subscriptionPeriodInterval: text("subscription_period_interval"),
+  paymentPeriodInterval: text("payment_period_interval"),
+  subscriptionPeriodCount: integer("subscription_period_count"),
+  paymentFrequencyCount: integer("payment_frequency_count"),
+  nextBillingDate: timestamp("next_billing_date", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  previousBillingDate: timestamp("previous_billing_date", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  customerId: text("customer_id").notNull(),
+  customerName: text("customer_name"),
+  customerEmail: text("customer_email").notNull(),
+  metadata: jsonb("metadata"),
+  discountId: text("discount_id"),
+  cancelledAt: timestamp("cancelled_at", {
+    mode: "string",
+    withTimezone: true,
+  }),
+  cancelAtNextBillingDate: boolean("cancel_at_next_billing_date"),
+  billing: jsonb("billing").notNull(),
+  onDemand: boolean("on_demand"),
+  addons: jsonb("addons"),
+});
+```
+
+#### Key Fields
+
+**Identification**
+- **subscriptionId** (text, PRIMARY KEY) - Unique subscription identifier
+- **userId** (text, FOREIGN KEY) - References users.supabaseUserId
+- **customerId** (text) - Dodo Payments customer ID
+- **productId** (text) - Product/plan identifier
+
+**Pricing**
+- **recurringPreTaxAmount** (real) - Subscription amount before tax
+- **currency** (text) - ISO currency code (e.g., "USD")
+- **taxInclusive** (boolean) - Whether price includes tax
+- **quantity** (integer) - Number of subscription units
+
+**Status & Lifecycle**
+- **status** (text) - Subscription state: "active", "cancelled", "expired", etc.
+- **createdAt** (timestamp) - Subscription creation date
+- **cancelledAt** (timestamp) - When subscription was cancelled
+- **cancelAtNextBillingDate** (boolean) - Scheduled cancellation flag
+
+**Billing Cycle**
+- **subscriptionPeriodInterval** (text) - Period unit: "Month", "Year", etc.
+- **subscriptionPeriodCount** (integer) - Number of periods
+- **paymentPeriodInterval** (text) - Payment frequency unit
+- **paymentFrequencyCount** (integer) - Payment frequency count
+- **nextBillingDate** (timestamp) - Next charge date
+- **previousBillingDate** (timestamp) - Last charge date
+
+**Additional Data**
+- **trialPeriodDays** (integer) - Free trial duration
+- **metadata** (jsonb) - Custom metadata object
+- **billing** (jsonb) - Billing address and details
+- **addons** (jsonb) - Additional add-ons array
+- **discountId** (text) - Applied discount/coupon ID
+- **onDemand** (boolean) - On-demand subscription flag
+
+**Customer Info**
+- **customerName** (text) - Customer display name
+- **customerEmail** (text) - Customer email address
+
+### Payments Table
+
+Stores complete payment/invoice history for all transactions.
+
+```typescript
+export const payments = pgTable("payments", {
+  paymentId: text("payment_id").primaryKey(),
+  status: text("status").notNull(),
+  totalAmount: real("total_amount").notNull(),
+  currency: text("currency").notNull(),
+  paymentMethod: text("payment_method"),
+  paymentMethodType: text("payment_method_type"),
+  customerId: text("customer_id").notNull(),
+  customerName: text("customer_name"),
+  customerEmail: text("customer_email").notNull(),
+  createdAt: timestamp("created_at", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  subscriptionId: text("subscription_id").notNull(),
+  brandId: text("brand_id").notNull(),
+  digitalProductDelivered: boolean("digital_product_delivered"),
+  metadata: jsonb("metadata"),
+  webhookData: jsonb("webhook_data").notNull(),
+  billing: jsonb("billing").notNull(),
+  businessId: text("business_id").notNull(),
+  cardIssuingCountry: text("card_issuing_country"),
+  cardLastFour: text("card_last_four"),
+  cardNetwork: text("card_network"),
+  cardType: text("card_type"),
+  discountId: text("discount_id"),
+  disputes: jsonb("disputes"),
+  errorCode: text("error_code"),
+  errorMessage: text("error_message"),
+  paymentLink: text("payment_link"),
+  productCart: jsonb("product_cart"),
+  refunds: jsonb("refunds"),
+  settlementAmount: real("settlement_amount"),
+  settlementCurrency: text("settlement_currency"),
+  settlementTax: real("settlement_tax"),
+  tax: real("tax"),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }),
+});
+```
+
+#### Key Fields
+
+**Payment Core**
+- **paymentId** (text, PRIMARY KEY) - Unique payment identifier
+- **status** (text) - "succeeded", "failed", "processing", "cancelled"
+- **totalAmount** (real) - Total payment amount
+- **currency** (text) - Payment currency
+- **createdAt** (timestamp) - Payment creation timestamp
+- **updatedAt** (timestamp) - Last update timestamp
+
+**Payment Method**
+- **paymentMethod** (text) - Payment method used
+- **paymentMethodType** (text) - Type of payment method
+- **cardLastFour** (text) - Last 4 digits of card
+- **cardNetwork** (text) - "visa", "mastercard", etc.
+- **cardType** (text) - "credit", "debit"
+- **cardIssuingCountry** (text) - Card issuing country code
+
+**References**
+- **customerId** (text) - Dodo Payments customer ID
+- **subscriptionId** (text) - Related subscription ID
+- **brandId** (text) - Brand identifier
+- **businessId** (text) - Business identifier
+
+**Financial Details**
+- **tax** (real) - Tax amount
+- **settlementAmount** (real) - Actual settlement amount
+- **settlementCurrency** (text) - Settlement currency
+- **settlementTax** (real) - Settlement tax amount
+- **discountId** (text) - Applied discount
+
+**Additional Data**
+- **customerName** (text) - Customer name
+- **customerEmail** (text) - Customer email
+- **billing** (jsonb) - Billing address object
+- **metadata** (jsonb) - Custom metadata
+- **webhookData** (jsonb) - Complete webhook payload
+- **productCart** (jsonb) - Products purchased
+- **paymentLink** (text) - Payment link URL
+
+**Issues & Refunds**
+- **errorCode** (text) - Error code if failed
+- **errorMessage** (text) - Error description
+- **disputes** (jsonb) - Dispute information
+- **refunds** (jsonb) - Refund details
+
+**Delivery**
+- **digitalProductDelivered** (boolean) - Delivery status flag
+
+## Relationships
+
+### User to Subscription (One-to-One)
+
+```typescript
+export const usersRelations = relations(users, ({ one, many }) => ({
+  currentSubscription: one(subscriptions, {
+    fields: [users.currentSubscriptionId],
+    references: [subscriptions.subscriptionId],
+  }),
+  subscriptions: many(subscriptions),
+}));
+```
+
+A user has:
+- One current/active subscription (nullable)
+- Many historical subscriptions
+
+### Subscription to User (Many-to-One)
+
+```typescript
+export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [subscriptions.userId],
+    references: [users.supabaseUserId],
+  }),
+}));
+```
+
+A subscription belongs to one user.
+
+## Type Exports
+
+The schema exports TypeScript types for type-safe database operations:
+
+```typescript
+// Select types (reading from database)
+export type SelectUser = typeof users.$inferSelect;
+export type SelectSubscription = typeof subscriptions.$inferSelect;
+export type SelectPayment = typeof payments.$inferSelect;
+
+// Insert types (writing to database)
+export type InsertUser = typeof users.$inferInsert;
+export type InsertSubscription = typeof subscriptions.$inferInsert;
+export type InsertPayment = typeof payments.$inferInsert;
+```
+
+## Usage Example
+
+```typescript
+import { db } from "@/lib/drizzle/client";
+import { users, subscriptions } from "@/lib/drizzle/schema";
+import { eq } from "drizzle-orm";
+
+// Query user with subscription
+const userWithSubscription = await db.query.users.findFirst({
+  where: eq(users.supabaseUserId, userId),
+  with: {
+    currentSubscription: true,
+  },
+});
+
+// Insert new user
+await db.insert(users).values({
+  supabaseUserId: "uuid",
+  dodoCustomerId: "cus_123",
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+
+// Update subscription
+await db
+  .update(subscriptions)
+  .set({ status: "cancelled" })
+  .where(eq(subscriptions.subscriptionId, subId));
+```
+
+## Database Client
+
+The database client is configured in `lib/drizzle/client.ts` using Drizzle ORM with PostgreSQL (via Supabase).
+
+## Migration Strategy
+
+Schema changes should be:
+1. Defined in `lib/drizzle/schema.ts`
+2. Generated as migrations using Drizzle Kit
+3. Applied to the database
+4. Synced with Supabase tables

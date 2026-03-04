@@ -1,0 +1,484 @@
+---
+title: 'Subscription Management'
+description: 'Complete guide to subscription features including plan changes, cancellations, and restoration'
+icon: 'credit-card'
+---
+
+## Overview
+
+The Dodo Starter kit provides a comprehensive subscription management system powered by **Dodo Payments**. Users can upgrade, downgrade, cancel, and restore their subscriptions through an intuitive UI.
+
+## Subscription Management Component
+
+The main subscription management interface displays current plan details, billing information, and action buttons:
+
+<Frame>
+  <img src="/images/subscription-management.png" alt="Subscription Management UI" />
+</Frame>
+
+### Core Component
+
+```tsx components/dashboard/subscription-management.tsx
+export function SubscriptionManagement({
+  currentPlan,
+  cancelSubscription,
+  updatePlan,
+  products,
+}: SubscriptionManagementProps) {
+  const currentPlanDetails = products.find(
+    (product) => product.product_id === currentPlan?.productId
+  );
+
+  const features = currentPlanDetails
+    ? JSON.parse(currentPlanDetails?.metadata.features || "[]")
+    : freePlan.features;
+
+  return (
+    <Card className="shadow-lg">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <CreditCard className="h-5 w-5 text-primary" />
+          Billing
+        </CardTitle>
+        <CardDescription>
+          Manage your current subscription and billing information
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-8">
+        {/* Current Plan Details */}
+        <div className="p-4 rounded-xl bg-gradient-to-r from-muted/30">
+          <div className="flex items-center gap-3 mb-2">
+            <h3 className="text-xl font-semibold">
+              {currentPlanDetails?.name || freePlan.name}
+            </h3>
+            {currentPlan && (
+              <TailwindBadge
+                variant={currentPlan.status === "active" ? "green" : "red"}
+              >
+                {currentPlan.status}
+              </TailwindBadge>
+            )}
+          </div>
+
+          <div className="flex gap-3 mt-4">
+            <UpdatePlanDialog {...updatePlan} />
+            {currentPlan && !currentPlan.cancelAtNextBillingDate && (
+              <CancelSubscriptionDialog {...cancelSubscription} />
+            )}
+            {currentPlan && currentPlan.cancelAtNextBillingDate && (
+              <RestoreSubscriptionDialog
+                subscriptionId={currentPlan.subscriptionId}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Billing Information */}
+        {currentPlan && (
+          <div className="space-y-4">
+            <h4 className="font-medium flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Billing Information
+            </h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 rounded-lg bg-muted border">
+                <span className="text-sm text-muted-foreground">Price</span>
+                <div className="font-medium">
+                  ${Number(currentPlanDetails?.price) / 100} /
+                  {currentPlan.paymentPeriodInterval === "Month"
+                    ? "month"
+                    : "year"}
+                </div>
+              </div>
+              <div className="p-3 rounded-lg bg-muted border">
+                <span className="text-sm text-muted-foreground">
+                  {currentPlan.cancelAtNextBillingDate
+                    ? "Cancels on"
+                    : "Next billing date"}
+                </span>
+                <div className="font-medium">
+                  {new Date(currentPlan.nextBillingDate).toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Plan Features */}
+        <div>
+          <h4 className="font-medium mb-4">Current Plan Features</h4>
+          <div className="flex flex-wrap gap-3">
+            {features.map((feature: string) => (
+              <div className="flex items-center gap-2 p-2 rounded-lg border">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                <span className="text-sm">{feature}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+## Change Plan Dialog
+
+Users can upgrade or downgrade their subscription through an interactive plan selection dialog:
+
+```tsx components/dashboard/update-plan-dialog.tsx
+export function UpdatePlanDialog({
+  currentPlan,
+  onPlanChange,
+  products,
+}: UpdatePlanDialogProps) {
+  const [isYearly, setIsYearly] = useState(
+    currentPlan ? currentPlan.paymentPeriodInterval === "Year" : false
+  );
+  const [selectedPlan, setSelectedPlan] = useState<string | undefined>(
+    currentPlan ? currentPlan.productId : undefined
+  );
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          disabled={!!currentPlan?.cancelAtNextBillingDate}
+        >
+          {currentPlan ? "Change Plan" : "Upgrade Plan"}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Upgrade Plan</DialogTitle>
+          <div className="flex items-center gap-2">
+            <Toggle
+              pressed={!isYearly}
+              onPressedChange={(pressed) => setIsYearly(!pressed)}
+            >
+              Monthly
+            </Toggle>
+            <Toggle
+              pressed={isYearly}
+              onPressedChange={(pressed) => setIsYearly(pressed)}
+            >
+              Yearly
+            </Toggle>
+          </div>
+        </DialogHeader>
+
+        <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan}>
+          {products
+            .filter((plan) =>
+              isYearly
+                ? plan.price_detail?.payment_frequency_interval === "Year"
+                : plan.price_detail?.payment_frequency_interval === "Month"
+            )
+            .map((plan) => (
+              <div key={plan.product_id} className="p-4 rounded-lg border">
+                <div className="flex items-start justify-between">
+                  <div className="flex gap-3">
+                    <RadioGroupItem value={plan.product_id} />
+                    <div>
+                      <Label>{plan.name}</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {plan.description}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xl font-semibold">
+                      ${Number(plan.price) / 100}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      /{isYearly ? "year" : "month"}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedPlan === plan.product_id && (
+                  <Button
+                    className="w-full mt-4"
+                    onClick={() => onPlanChange(plan.product_id)}
+                  >
+                    Subscribe
+                  </Button>
+                )}
+              </div>
+            ))}
+        </RadioGroup>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+## Plan Change Logic
+
+The `changePlan` server action handles subscription upgrades and downgrades:
+
+```ts actions/change-plan.ts
+import { dodoClient } from "@/lib/dodo-payments/client";
+
+export async function changePlan(props: {
+  subscriptionId: string;
+  productId: string;
+}): ServerActionRes {
+  try {
+    await dodoClient.subscriptions.changePlan(props.subscriptionId, {
+      product_id: props.productId,
+      proration_billing_mode: "prorated_immediately",
+      quantity: 1,
+    });
+    return {
+      success: true,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unknown error occurred",
+    };
+  }
+}
+```
+
+**Key Features:**
+- **Prorated Billing**: Users are charged/credited immediately based on the time remaining
+- **Immediate Activation**: The new plan takes effect instantly
+- **Automatic Updates**: The subscription is updated via webhooks
+
+## Cancel Subscription
+
+Users can cancel their subscription with a two-step confirmation dialog:
+
+```tsx components/dashboard/cancel-subscription-dialog.tsx
+export function CancelSubscriptionDialog({
+  plan,
+  onCancel,
+  products,
+}: CancelSubscriptionDialogProps) {
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleConfirmCancellation = async () => {
+    setIsLoading(true);
+    if (plan) {
+      await onCancel(plan.subscriptionId);
+    }
+    handleDialogClose();
+  };
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          Cancel Subscription
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        {!showConfirmation ? (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-2xl font-semibold">Cancel Subscription</h2>
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to cancel your subscription?
+            </p>
+
+            {/* Plan Details */}
+            <div className="p-4 bg-muted/50 rounded-lg">
+              <span className="font-semibold text-lg">
+                {currentPlanDetails?.name} Plan
+              </span>
+            </div>
+
+            {/* Warning */}
+            <div className="p-4 bg-muted/30 border rounded-lg">
+              <h3 className="font-semibold mb-2">You will lose access</h3>
+              <p className="text-sm text-muted-foreground">
+                If you cancel, you'll lose access to all premium features.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button className="flex-1" onClick={handleDialogClose}>
+                Keep My Subscription
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={() => setShowConfirmation(true)}
+              >
+                Continue Cancellation
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <h3 className="font-semibold mb-2">Final Confirmation</h3>
+              <p className="text-sm text-destructive">
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirmation(false)}
+              >
+                Go Back
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmCancellation}
+                disabled={isLoading}
+              >
+                Yes, Cancel Subscription
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+### Cancellation Server Action
+
+```ts actions/cancel-subscription.ts
+export async function cancelSubscription(props: {
+  subscriptionId: string;
+}): ServerActionRes {
+  try {
+    // Update subscription in Dodo Payments
+    await dodoClient.subscriptions.update(props.subscriptionId, {
+      cancel_at_next_billing_date: true,
+    });
+
+    // Update local database
+    await db
+      .update(subscriptions)
+      .set({
+        cancelAtNextBillingDate: true,
+      })
+      .where(eq(subscriptions.subscriptionId, props.subscriptionId));
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "An unknown error occurred",
+    };
+  }
+}
+```
+
+**Cancellation Behavior:**
+- Subscription remains active until the next billing date
+- User keeps access to features until the period ends
+- Marked with a "Scheduled for cancellation" badge
+- Can be restored before the cancellation date
+
+## Restore Subscription
+
+Canceled subscriptions can be restored before they expire:
+
+```tsx components/dashboard/restore-subscription-dialog.tsx
+export function RestoreSubscriptionDialog({
+  subscriptionId,
+}: RestoreSubscriptionDialogProps) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleRestore = async () => {
+    setIsLoading(true);
+    await restoreSubscription({ subscriptionId });
+    toast.success("Subscription restored successfully");
+    window.location.reload();
+  };
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="sm" variant="default">
+          Restore Subscription
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Restore Subscription</AlertDialogTitle>
+          <AlertDialogDescription>
+            Your subscription will continue at the next billing date.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <Button onClick={handleRestore} disabled={isLoading}>
+            {isLoading ? "Restoring..." : "Restore"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+```
+
+## Get User Subscription
+
+Retrieves the current user's subscription details:
+
+```ts actions/get-user-subscription.ts
+export async function getUserSubscription(): ServerActionRes<UserSubscription> {
+  const userRes = await getUser();
+
+  if (!userRes.success) {
+    return { success: false, error: "User not found" };
+  }
+
+  const user = userRes.data;
+
+  const userDetails = await db.query.users.findFirst({
+    where: eq(users.supabaseUserId, user.id),
+  });
+
+  if (!userDetails) {
+    return { success: false, error: "User details not found" };
+  }
+
+  if (!userDetails.currentSubscriptionId) {
+    return { success: true, data: { subscription: null, user: userDetails } };
+  }
+
+  const subscription = await db.query.subscriptions.findFirst({
+    where: eq(subscriptions.subscriptionId, userDetails.currentSubscriptionId),
+  });
+
+  return {
+    success: true,
+    data: { subscription: subscription ?? null, user: userDetails },
+  };
+}
+```
+
+## Subscription States
+
+| Status | Description | User Access |
+|--------|-------------|-------------|
+| `active` | Subscription is active and paid | Full access |
+| `on_hold` | Payment failed, awaiting retry | Limited access |
+| `cancelled` | Cancelled by user | Access until period ends |
+| `expired` | Subscription period ended | No access |
+| `failed` | Payment failed permanently | No access |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Payment Processing" icon="money-bill" href="/features/payments">
+    Learn about checkout and payment handling
+  </Card>
+  <Card title="Invoice History" icon="receipt" href="/features/invoices">
+    View and manage customer invoices
+  </Card>
+</CardGroup>

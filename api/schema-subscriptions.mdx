@@ -1,0 +1,492 @@
+---
+title: Subscriptions Table Schema
+description: Database schema reference for the subscriptions table
+---
+
+The `subscriptions` table stores all subscription records from Dodo Payments, including billing details, status, and customer information.
+
+**Source:** `~/workspace/source/lib/drizzle/schema.ts:30-69`
+
+## Table Definition
+
+```typescript
+export const subscriptions = pgTable("subscriptions", {
+  subscriptionId: text("subscription_id").primaryKey().notNull(),
+  userId: text("user_id").references(() => users.supabaseUserId),
+  recurringPreTaxAmount: real("recurring_pre_tax_amount").notNull(),
+  taxInclusive: boolean("tax_inclusive").notNull(),
+  currency: text("currency").notNull(),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  productId: text("product_id").notNull(),
+  quantity: integer("quantity").notNull(),
+  trialPeriodDays: integer("trial_period_days"),
+  subscriptionPeriodInterval: text("subscription_period_interval"),
+  paymentPeriodInterval: text("payment_period_interval"),
+  subscriptionPeriodCount: integer("subscription_period_count"),
+  paymentFrequencyCount: integer("payment_frequency_count"),
+  nextBillingDate: timestamp("next_billing_date", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  previousBillingDate: timestamp("previous_billing_date", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  customerId: text("customer_id").notNull(),
+  customerName: text("customer_name"),
+  customerEmail: text("customer_email").notNull(),
+  metadata: jsonb("metadata"),
+  discountId: text("discount_id"),
+  cancelledAt: timestamp("cancelled_at", {
+    mode: "string",
+    withTimezone: true,
+  }),
+  cancelAtNextBillingDate: boolean("cancel_at_next_billing_date"),
+  billing: jsonb("billing").notNull(),
+  onDemand: boolean("on_demand"),
+  addons: jsonb("addons"),
+});
+```
+
+## Core Fields
+
+<ResponseField name="subscription_id" type="text" required>
+  **Primary Key**
+  
+  Unique identifier for the subscription from Dodo Payments.
+  
+  Used for upsert operations in webhook handlers.
+</ResponseField>
+
+<ResponseField name="user_id" type="text">
+  **Foreign Key** → `users.supabase_user_id`
+  
+  Links subscription to a user in your application.
+  
+  Nullable to support subscriptions created before user account exists.
+</ResponseField>
+
+<ResponseField name="status" type="text" required>
+  Current status of the subscription.
+  
+  **Possible values:**
+  - `active` - Subscription is active
+  - `cancelled` - Subscription has been cancelled
+  - `expired` - Subscription has expired
+  - `failed` - Subscription failed (e.g., payment failure)
+  - `on_hold` - Subscription is on hold
+  
+  Updated by webhook events.
+</ResponseField>
+
+## Pricing Fields
+
+<ResponseField name="recurring_pre_tax_amount" type="real" required>
+  Recurring subscription amount before tax.
+  
+  Stored as a floating-point number.
+</ResponseField>
+
+<ResponseField name="tax_inclusive" type="boolean" required>
+  Whether the pricing includes tax.
+  
+  - `true` - Price includes tax
+  - `false` - Tax added on top of price
+</ResponseField>
+
+<ResponseField name="currency" type="text" required>
+  Three-letter ISO currency code (e.g., "USD", "EUR", "GBP").
+</ResponseField>
+
+<ResponseField name="quantity" type="integer" required>
+  Number of subscription units.
+  
+  Used for quantity-based pricing.
+</ResponseField>
+
+## Product & Plan Fields
+
+<ResponseField name="product_id" type="text" required>
+  Dodo Payments product identifier.
+  
+  Links to your product catalog in Dodo Payments.
+</ResponseField>
+
+<ResponseField name="trial_period_days" type="integer">
+  **Nullable**
+  
+  Length of trial period in days.
+  
+  `null` if no trial period.
+</ResponseField>
+
+<ResponseField name="subscription_period_interval" type="text">
+  **Nullable**
+  
+  Interval unit for the subscription period (e.g., "month", "year").
+</ResponseField>
+
+<ResponseField name="subscription_period_count" type="integer">
+  **Nullable**
+  
+  Number of subscription period intervals.
+  
+  Combined with `subscription_period_interval` to define total subscription length.
+</ResponseField>
+
+<ResponseField name="payment_period_interval" type="text">
+  **Nullable**
+  
+  Interval unit for billing frequency.
+  
+  Mapped from webhook field `payment_frequency_interval` (note the naming difference).
+  
+  **Source:** supabase/functions/dodo-webhook/index.ts:181
+</ResponseField>
+
+<ResponseField name="payment_frequency_count" type="integer">
+  **Nullable**
+  
+  Number of intervals between payments.
+  
+  Example: `payment_frequency_count: 3` with `payment_period_interval: "month"` means billing every 3 months.
+</ResponseField>
+
+## Billing Fields
+
+<ResponseField name="next_billing_date" type="timestamp" required>
+  **With timezone**
+  
+  ISO 8601 timestamp of the next scheduled billing.
+  
+  Updated with each renewal.
+</ResponseField>
+
+<ResponseField name="previous_billing_date" type="timestamp" required>
+  **With timezone**
+  
+  ISO 8601 timestamp of the last billing.
+</ResponseField>
+
+<ResponseField name="billing" type="jsonb" required>
+  Billing information object.
+  
+  Contains billing address and contact details from Dodo Payments.
+</ResponseField>
+
+## Customer Fields
+
+<ResponseField name="customer_id" type="text" required>
+  Dodo Payments customer identifier.
+  
+  Corresponds to `dodo_customer_id` in the users table.
+</ResponseField>
+
+<ResponseField name="customer_email" type="text" required>
+  Customer email address.
+</ResponseField>
+
+<ResponseField name="customer_name" type="text">
+  **Nullable**
+  
+  Customer full name.
+</ResponseField>
+
+## Optional Fields
+
+<ResponseField name="metadata" type="jsonb">
+  **Nullable**
+  
+  Custom metadata object from Dodo Payments.
+  
+  Use for storing custom attributes and tags.
+</ResponseField>
+
+<ResponseField name="discount_id" type="text">
+  **Nullable**
+  
+  Applied discount identifier.
+  
+  Links to discount/coupon in Dodo Payments.
+</ResponseField>
+
+<ResponseField name="addons" type="jsonb">
+  **Nullable**
+  
+  Subscription addons object.
+  
+  Contains additional products or features added to the base subscription.
+</ResponseField>
+
+<ResponseField name="on_demand" type="boolean">
+  **Nullable**
+  
+  Whether this is an on-demand subscription.
+</ResponseField>
+
+## Cancellation Fields
+
+<ResponseField name="cancelled_at" type="timestamp">
+  **Nullable, With timezone**
+  
+  ISO 8601 timestamp when subscription was cancelled.
+  
+  Set by `subscription.cancelled` webhook event.
+</ResponseField>
+
+<ResponseField name="cancel_at_next_billing_date" type="boolean">
+  **Nullable**
+  
+  Whether subscription will cancel at next billing date.
+  
+  - `true` - Subscription will end at next billing
+  - `false` or `null` - Subscription continues normally
+</ResponseField>
+
+## Timestamps
+
+<ResponseField name="created_at" type="timestamp" required>
+  **With timezone**
+  
+  ISO 8601 timestamp when subscription was created.
+</ResponseField>
+
+## Relations
+
+**Defined at:** lib/drizzle/schema.ts:119-124
+
+```typescript
+export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [subscriptions.userId],
+    references: [users.supabaseUserId],
+  }),
+}));
+```
+
+### user (many-to-one)
+
+Links subscription to the associated user account.
+
+<ResponseField name="Related Table" type="users">
+  Foreign key: `subscriptions.user_id` → `users.supabase_user_id`
+</ResponseField>
+
+## TypeScript Types
+
+**Defined at:** lib/drizzle/schema.ts:129-130
+
+```typescript
+export type SelectSubscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;
+```
+
+### SelectSubscription
+
+Type for reading subscription records from the database.
+
+```typescript
+type SelectSubscription = {
+  subscriptionId: string;
+  userId: string | null;
+  recurringPreTaxAmount: number;
+  taxInclusive: boolean;
+  currency: string;
+  status: string;
+  createdAt: string;
+  productId: string;
+  quantity: number;
+  trialPeriodDays: number | null;
+  subscriptionPeriodInterval: string | null;
+  paymentPeriodInterval: string | null;
+  subscriptionPeriodCount: number | null;
+  paymentFrequencyCount: number | null;
+  nextBillingDate: string;
+  previousBillingDate: string;
+  customerId: string;
+  customerName: string | null;
+  customerEmail: string;
+  metadata: unknown | null;
+  discountId: string | null;
+  cancelledAt: string | null;
+  cancelAtNextBillingDate: boolean | null;
+  billing: unknown;
+  onDemand: boolean | null;
+  addons: unknown | null;
+}
+```
+
+### InsertSubscription
+
+Type for inserting new subscription records.
+
+```typescript
+type InsertSubscription = {
+  subscriptionId: string;
+  userId?: string | null;
+  recurringPreTaxAmount: number;
+  taxInclusive: boolean;
+  currency: string;
+  status: string;
+  createdAt: string;
+  productId: string;
+  quantity: number;
+  trialPeriodDays?: number | null;
+  subscriptionPeriodInterval?: string | null;
+  paymentPeriodInterval?: string | null;
+  subscriptionPeriodCount?: number | null;
+  paymentFrequencyCount?: number | null;
+  nextBillingDate: string;
+  previousBillingDate: string;
+  customerId: string;
+  customerName?: string | null;
+  customerEmail: string;
+  metadata?: unknown | null;
+  discountId?: string | null;
+  cancelledAt?: string | null;
+  cancelAtNextBillingDate?: boolean | null;
+  billing: unknown;
+  onDemand?: boolean | null;
+  addons?: unknown | null;
+}
+```
+
+## Usage in Webhook Handlers
+
+### Upserting Subscription Data
+
+**Source:** supabase/functions/dodo-webhook/index.ts:164-199
+
+```typescript
+async function manageSubscription(event: any) {
+  const data = {
+    subscription_id: event.data.subscription_id,
+    addons: event.data.addons,
+    billing: event.data.billing,
+    cancel_at_next_billing_date: event.data.cancel_at_next_billing_date,
+    cancelled_at: event.data.cancelled_at,
+    created_at: event.data.created_at,
+    currency: event.data.currency,
+    customer_email: event.data.customer.email,
+    customer_name: event.data.customer.name,
+    customer_id: event.data.customer.customer_id,
+    discount_id: event.data.discount_id,
+    metadata: event.data.metadata,
+    next_billing_date: event.data.next_billing_date,
+    on_demand: event.data.on_demand,
+    payment_frequency_count: event.data.payment_frequency_count,
+    payment_period_interval: event.data.payment_frequency_interval,
+    previous_billing_date: event.data.previous_billing_date,
+    product_id: event.data.product_id,
+    quantity: event.data.quantity,
+    recurring_pre_tax_amount: event.data.recurring_pre_tax_amount,
+    status: event.data.status,
+    subscription_period_count: event.data.subscription_period_count,
+    subscription_period_interval: event.data.subscription_period_interval,
+    tax_inclusive: event.data.tax_inclusive,
+    trial_period_days: event.data.trial_period_days,
+  };
+
+  const { error } = await supabase.from("subscriptions").upsert(data, {
+    onConflict: "subscription_id",
+  });
+
+  if (error) throw error;
+  console.log(`Subscription ${data.subscription_id} upserted successfully.`);
+}
+```
+
+Handled by webhook events:
+- `subscription.active`
+- `subscription.plan_changed`
+- `subscription.renewed`
+- `subscription.on_hold`
+- `subscription.cancelled`
+- `subscription.expired`
+- `subscription.failed`
+
+## Query Examples
+
+### Get User's Active Subscription
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { subscriptions } from "@/lib/drizzle/schema";
+import { eq, and } from "drizzle-orm";
+
+const [activeSubscription] = await db
+  .select()
+  .from(subscriptions)
+  .where(
+    and(
+      eq(subscriptions.userId, userId),
+      eq(subscriptions.status, "active")
+    )
+  )
+  .limit(1);
+```
+
+### Get Subscriptions Due for Renewal
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { subscriptions } from "@/lib/drizzle/schema";
+import { lte, eq } from "drizzle-orm";
+
+const today = new Date().toISOString();
+
+const dueSubscriptions = await db
+  .select()
+  .from(subscriptions)
+  .where(
+    and(
+      eq(subscriptions.status, "active"),
+      lte(subscriptions.nextBillingDate, today)
+    )
+  );
+```
+
+### Calculate Monthly Recurring Revenue (MRR)
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { subscriptions } from "@/lib/drizzle/schema";
+import { eq, sum } from "drizzle-orm";
+
+const [result] = await db
+  .select({
+    total: sum(subscriptions.recurringPreTaxAmount),
+  })
+  .from(subscriptions)
+  .where(eq(subscriptions.status, "active"));
+
+const mrr = result?.total || 0;
+```
+
+### Get Subscriptions with Addons
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { subscriptions } from "@/lib/drizzle/schema";
+import { isNotNull } from "drizzle-orm";
+
+const subscriptionsWithAddons = await db
+  .select()
+  .from(subscriptions)
+  .where(isNotNull(subscriptions.addons));
+```
+
+## Related Tables
+
+<CardGroup cols={2}>
+  <Card title="Users Schema" icon="user" href="/api/schema-users">
+    View the users table schema
+  </Card>
+  <Card title="Payments Schema" icon="credit-card" href="/api/schema-payments">
+    View the payments table schema
+  </Card>
+</CardGroup>

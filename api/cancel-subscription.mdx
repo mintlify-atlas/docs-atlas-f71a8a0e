@@ -1,0 +1,269 @@
+---
+title: 'cancelSubscription'
+description: 'Cancels a subscription at the end of the current billing period'
+---
+
+## Overview
+
+The `cancelSubscription` function schedules a subscription to be cancelled at the end of the current billing period. The user retains access until the next billing date, and no refund is issued.
+
+## Function Signature
+
+```typescript
+export async function cancelSubscription(props: {
+  subscriptionId: string;
+}): ServerActionRes
+```
+
+## Parameters
+
+<ParamField path="subscriptionId" type="string" required>
+  The ID of the subscription to cancel
+</ParamField>
+
+## Return Value
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the operation was successful
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the operation failed. Contains the specific error message from the Dodo Payments API or "An unknown error occurred" for unexpected errors.
+</ResponseField>
+
+## Implementation Details
+
+The function:
+
+1. Calls the Dodo Payments API to update the subscription with `cancel_at_next_billing_date: true`
+2. Updates the local database to set `cancelAtNextBillingDate: true` on the subscription record
+3. The subscription remains active until the next billing date
+4. No refund is issued - user retains access for the paid period
+5. Returns success if both API call and database update complete
+
+### Cancellation Behavior
+
+- The subscription is **not** cancelled immediately
+- User retains access until the `nextBillingDate`
+- No charges occur on the next billing date
+- The subscription status changes to cancelled after the billing period ends
+- User can restore the subscription before the billing date using `restoreSubscription`
+
+## Error Handling
+
+- Returns `{ success: false, error: <message> }` with the actual error message from Dodo Payments or database
+- Returns `{ success: false, error: "An unknown error occurred" }` for unexpected errors
+- All exceptions are caught and converted to structured error responses
+
+## Usage Example
+
+```typescript
+import { cancelSubscription } from '@/actions/cancel-subscription';
+import { getUserSubscription } from '@/actions/get-user-subscription';
+
+export default async function CancelHandler() {
+  // Get current subscription
+  const subResult = await getUserSubscription();
+  
+  if (!subResult.success || !subResult.data.subscription) {
+    return <div>No active subscription to cancel</div>;
+  }
+
+  const subscription = subResult.data.subscription;
+
+  // Cancel the subscription
+  const result = await cancelSubscription({
+    subscriptionId: subscription.subscriptionId
+  });
+
+  if (!result.success) {
+    return <div>Error cancelling subscription: {result.error}</div>;
+  }
+
+  return (
+    <div>
+      <p>Subscription cancelled successfully</p>
+      <p>You will retain access until {new Date(subscription.nextBillingDate).toLocaleDateString()}</p>
+    </div>
+  );
+}
+```
+
+## Client Component Example
+
+```typescript
+'use client';
+
+import { cancelSubscription } from '@/actions/cancel-subscription';
+import { useState } from 'react';
+
+export function CancelSubscriptionButton({ subscriptionId, nextBillingDate }) {
+  const [loading, setLoading] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleCancel = async () => {
+    const confirmed = confirm(
+      `Are you sure you want to cancel? You'll retain access until ${new Date(nextBillingDate).toLocaleDateString()}.`
+    );
+
+    if (!confirmed) return;
+
+    setLoading(true);
+    setError(null);
+
+    const result = await cancelSubscription({ subscriptionId });
+
+    if (result.success) {
+      setCancelled(true);
+    } else {
+      setError(result.error);
+    }
+
+    setLoading(false);
+  };
+
+  if (cancelled) {
+    return (
+      <div className="text-green-600">
+        Subscription cancelled. Access until {new Date(nextBillingDate).toLocaleDateString()}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {error && <div className="text-red-600">{error}</div>}
+      <button
+        onClick={handleCancel}
+        disabled={loading}
+        className="bg-red-600 text-white px-4 py-2 rounded"
+      >
+        {loading ? 'Cancelling...' : 'Cancel Subscription'}
+      </button>
+    </div>
+  );
+}
+```
+
+## Cancellation Flow with Feedback Form
+
+```typescript
+'use client';
+
+import { cancelSubscription } from '@/actions/cancel-subscription';
+import { useState } from 'react';
+
+export function CancellationFlow({ subscriptionId, nextBillingDate }) {
+  const [step, setStep] = useState('confirm'); // 'confirm' | 'feedback' | 'done'
+  const [feedback, setFeedback] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleCancel = async () => {
+    setLoading(true);
+
+    // Submit feedback (implement your own feedback endpoint)
+    if (feedback) {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify({ feedback, type: 'cancellation' })
+      });
+    }
+
+    // Cancel subscription
+    const result = await cancelSubscription({ subscriptionId });
+
+    if (result.success) {
+      setStep('done');
+    } else {
+      alert(`Error: ${result.error}`);
+    }
+
+    setLoading(false);
+  };
+
+  if (step === 'confirm') {
+    return (
+      <div>
+        <h2>Cancel Subscription?</h2>
+        <p>You'll keep access until {new Date(nextBillingDate).toLocaleDateString()}</p>
+        <button onClick={() => setStep('feedback')}>Continue to Cancel</button>
+        <button onClick={() => window.history.back()}>Keep Subscription</button>
+      </div>
+    );
+  }
+
+  if (step === 'feedback') {
+    return (
+      <div>
+        <h2>We're sorry to see you go</h2>
+        <p>Would you mind telling us why you're cancelling?</p>
+        <textarea
+          value={feedback}
+          onChange={(e) => setFeedback(e.target.value)}
+          placeholder="Your feedback helps us improve..."
+          rows={4}
+        />
+        <button onClick={handleCancel} disabled={loading}>
+          {loading ? 'Cancelling...' : 'Confirm Cancellation'}
+        </button>
+        <button onClick={handleCancel} disabled={loading}>
+          Skip & Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2>Subscription Cancelled</h2>
+      <p>You'll continue to have access until {new Date(nextBillingDate).toLocaleDateString()}</p>
+      <p>Changed your mind? <a href="/api/restore-subscription">Restore your subscription</a></p>
+    </div>
+  );
+}
+```
+
+## Displaying Cancellation Status
+
+```typescript
+import { getUserSubscription } from '@/actions/get-user-subscription';
+
+export default async function SubscriptionStatus() {
+  const result = await getUserSubscription();
+
+  if (!result.success || !result.data.subscription) {
+    return <div>No active subscription</div>;
+  }
+
+  const subscription = result.data.subscription;
+
+  if (subscription.cancelAtNextBillingDate) {
+    return (
+      <div className="border-l-4 border-yellow-500 p-4">
+        <h3>Subscription Cancelling</h3>
+        <p>Your subscription will end on {new Date(subscription.nextBillingDate).toLocaleDateString()}</p>
+        <a href="/api/restore-subscription">Restore Subscription</a>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p>Active subscription</p>
+      <p>Next billing: {new Date(subscription.nextBillingDate).toLocaleDateString()}</p>
+      <a href="/api/cancel-subscription">Cancel</a>
+    </div>
+  );
+}
+```
+
+## Related Actions
+
+- [`restoreSubscription`](/api/restore-subscription) - Restores a cancelled subscription
+- [`getUserSubscription`](/api/get-user-subscription) - Gets subscription status
+- [`deleteAccount`](/api/delete-account) - Permanently deletes the account
+
+## Source Code
+
+Location: `actions/cancel-subscription.ts:9`

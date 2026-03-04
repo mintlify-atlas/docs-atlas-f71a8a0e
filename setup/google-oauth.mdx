@@ -1,0 +1,142 @@
+---
+title: Google OAuth Configuration
+description: Set up Google OAuth for user authentication in your Supabase project
+---
+
+## Overview
+
+This guide walks you through configuring Google OAuth as the authentication provider for your subscription application. Users will be able to sign in using their Google accounts.
+
+## Prerequisites
+
+- A Supabase project (see [Supabase Setup](/setup/supabase))
+- A Google Cloud Console account
+
+## Configure Google Cloud Console
+
+<Steps>
+  <Step title="Create or select a Google Cloud project">
+    Go to [Google Cloud Console](https://console.cloud.google.com) and either:
+    - Create a new project by clicking **Select a project** → **New Project**
+    - Select an existing project from the dropdown
+  </Step>
+
+  <Step title="Enable Google+ API">
+    In your Google Cloud project:
+    1. Navigate to **APIs & Services** → **Library**
+    2. Search for "Google+ API"
+    3. Click on it and press **Enable**
+
+    <Note>
+      The Google+ API is required for OAuth authentication even though Google+ as a social network is deprecated.
+    </Note>
+  </Step>
+
+  <Step title="Configure OAuth consent screen">
+    Navigate to **APIs & Services** → **OAuth consent screen**.
+
+    1. Select **External** as the user type (unless you're using Google Workspace)
+    2. Fill in the required application information:
+       - **App name**: Your application name
+       - **User support email**: Your support email
+       - **Developer contact information**: Your email address
+    3. Click **Save and Continue**
+    4. Skip the "Scopes" section by clicking **Save and Continue**
+    5. Add test users if your app is in testing mode
+    6. Click **Save and Continue** to finish
+  </Step>
+
+  <Step title="Create OAuth 2.0 credentials">
+    Navigate to **APIs & Services** → **Credentials**.
+
+    1. Click **Create Credentials** → **OAuth 2.0 Client IDs**
+    2. Select **Web application** as the application type
+    3. Add a name for your OAuth client
+    4. Under **Authorized redirect URIs**, add:
+       ```
+       https://[your-project-ref].supabase.co/auth/v1/callback
+       ```
+       Replace `[your-project-ref]` with your actual Supabase project reference.
+
+    5. Click **Create**
+    6. Copy the **Client ID** and **Client Secret** from the popup
+
+    <Warning>
+      Keep your Client Secret secure. Never commit it to version control or expose it in client-side code.
+    </Warning>
+  </Step>
+</Steps>
+
+## Configure Supabase Authentication
+
+<Steps>
+  <Step title="Navigate to Authentication settings">
+    In your Supabase project dashboard, go to **Authentication** → **Providers**.
+  </Step>
+
+  <Step title="Enable Google provider">
+    1. Find **Google** in the list of providers
+    2. Toggle the **Enable** switch
+    3. Enter the **Client ID** from Google Cloud Console
+    4. Enter the **Client Secret** from Google Cloud Console
+    5. Click **Save**
+  </Step>
+
+  <Step title="Verify the configuration">
+    Your Google OAuth configuration is now complete. The redirect URL shown in Supabase should match the one you configured in Google Cloud Console:
+    ```
+    https://[your-project-ref].supabase.co/auth/v1/callback
+    ```
+  </Step>
+</Steps>
+
+## Test Authentication
+
+Once you've deployed your application, you can test the Google OAuth flow:
+
+1. Navigate to your application's sign-in page
+2. Click the "Sign in with Google" button
+3. You should be redirected to Google's OAuth consent screen
+4. After granting permissions, you'll be redirected back to your application
+
+<Note>
+  If your Google Cloud project is in testing mode, only users you've added as test users will be able to sign in.
+</Note>
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Redirect URI mismatch error">
+    This error occurs when the redirect URI in your Google Cloud Console doesn't exactly match the one used by Supabase.
+
+    **Solution**: Double-check that you've added the exact redirect URI:
+    ```
+    https://[your-project-ref].supabase.co/auth/v1/callback
+    ```
+
+    Make sure there are no trailing slashes or typos.
+  </Accordion>
+
+  <Accordion title="Access blocked: This app's request is invalid">
+    This usually happens when the OAuth consent screen is not properly configured.
+
+    **Solution**: Go back to the OAuth consent screen in Google Cloud Console and ensure all required fields are filled in correctly.
+  </Accordion>
+
+  <Accordion title="Only test users can sign in">
+    If your app is in testing mode, only users explicitly added as test users can authenticate.
+
+    **Solution**: Either add users as test users in the OAuth consent screen, or publish your app to production (requires verification for certain scopes).
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dodo Payments" icon="credit-card" href="./dodo-payments">
+    Set up your Dodo Payments account for subscription management
+  </Card>
+  <Card title="Database Setup" icon="database" href="./database">
+    Configure your database schema
+  </Card>
+</CardGroup>

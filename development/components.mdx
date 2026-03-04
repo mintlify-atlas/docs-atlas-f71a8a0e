@@ -1,0 +1,609 @@
+---
+title: "Components"
+description: "Component architecture and patterns"
+---
+
+## Overview
+
+The component architecture follows a feature-based organization with shared UI components from shadcn/ui. Components are split between client and server components for optimal performance.
+
+## Component Structure
+
+```
+components/
+├── auth/              # Authentication components
+│   └── google-signin.tsx
+├── dashboard/         # Dashboard feature components
+│   ├── dashboard.tsx
+│   ├── subscription-management.tsx
+│   ├── invoice-history.tsx
+│   ├── account-management.tsx
+│   ├── cancel-subscription-dialog.tsx
+│   ├── update-plan-dialog.tsx
+│   └── restore-subscription-dialog.tsx
+├── layout/            # Layout components
+│   └── header.tsx
+├── ui/                # Shared UI components (shadcn/ui)
+│   ├── button.tsx
+│   ├── card.tsx
+│   ├── dialog.tsx
+│   └── ...
+└── theme-provider.tsx
+```
+
+## Authentication Components
+
+### GoogleSignIn
+
+Location: `components/auth/google-signin.tsx`
+
+Handles Google OAuth authentication flow.
+
+```typescript
+"use client";
+
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "../ui/button";
+import Image from "next/image";
+import { useState } from "react";
+import { LoaderCircle } from "lucide-react";
+
+export default function GoogleSignIn() {
+  const supabase = createClient();
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    setLoading(true);
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/api/auth/callback`,
+      },
+    });
+  };
+
+  return (
+    <Button
+      variant="outline"
+      className="flex flex-row gap-2 w-48 items-center justify-center rounded-xl"
+      onClick={handleLogin}
+    >
+      {loading ? (
+        <LoaderCircle className="size-4 animate-spin" />
+      ) : (
+        <Image src="/assets/google.png" alt="Google" width={16} height={16} />
+      )}
+      Continue with Google
+    </Button>
+  );
+}
+```
+
+**Features:**
+- Client-side OAuth initiation
+- Loading state management
+- Automatic redirect handling
+
+## Dashboard Components
+
+### Dashboard
+
+Location: `components/dashboard/dashboard.tsx`
+
+Main dashboard container with tabbed interface.
+
+```typescript
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { motion } from "framer-motion";
+import { CreditCard, ReceiptText, UserIcon } from "lucide-react";
+
+export function Dashboard(props: {
+  products: ProductListResponse[];
+  user: User;
+  userSubscription: {
+    subscription: SelectSubscription | null;
+    user: SelectUser;
+  };
+  invoices: SelectPayment[];
+}) {
+  const [active, setActive] = useState("manage-subscription");
+
+  const components = [
+    { id: "manage-subscription", label: "Billing", icon: CreditCard },
+    { id: "payments", label: "Invoices", icon: ReceiptText },
+    { id: "account", label: "Account", icon: UserIcon },
+  ];
+
+  // Tab content rendering
+  return (
+    <Tabs value={active} onValueChange={setActive}>
+      <TabsList>
+        {components.map((item) => (
+          <TabsTrigger key={item.id} value={item.id}>
+            <item.icon className="h-4 w-4" />
+            {item.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+
+      <TabsContent value="manage-subscription">
+        <SubscriptionManagement {...props} />
+      </TabsContent>
+
+      <TabsContent value="payments">
+        <InvoiceHistory invoices={props.invoices} />
+      </TabsContent>
+
+      <TabsContent value="account">
+        <AccountManagement {...props} />
+      </TabsContent>
+    </Tabs>
+  );
+}
+```
+
+**Features:**
+- Three-tab interface (Billing, Invoices, Account)
+- Animated tab indicator with Framer Motion
+- Responsive design for mobile/desktop
+- Props drilling for data distribution
+
+**Props:**
+- `products` - Available subscription products
+- `user` - Supabase user object
+- `userSubscription` - User record and current subscription
+- `invoices` - Payment history
+
+### SubscriptionManagement
+
+Location: `components/dashboard/subscription-management.tsx`
+
+Displays and manages subscription details.
+
+```typescript
+"use client";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CancelSubscriptionDialog } from "./cancel-subscription-dialog";
+import { UpdatePlanDialog } from "./update-plan-dialog";
+import { RestoreSubscriptionDialog } from "./restore-subscription-dialog";
+
+export function SubscriptionManagement({
+  className,
+  currentPlan,
+  cancelSubscription,
+  updatePlan,
+  products,
+}: SubscriptionManagementProps) {
+  const currentPlanDetails = products.find(
+    (product) => product.product_id === currentPlan?.productId
+  );
+
+  const features = currentPlanDetails
+    ? JSON.parse(currentPlanDetails?.metadata.features || "[]")
+    : freePlan.features;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Billing</CardTitle>
+      </CardHeader>
+
+      <CardContent>
+        {/* Plan name and status */}
+        <h3>{currentPlanDetails?.name || freePlan.name}</h3>
+        <p>{currentPlanDetails?.description || freePlan.description}</p>
+
+        {/* Action buttons */}
+        <UpdatePlanDialog {...updatePlan} />
+        
+        {currentPlan && !currentPlan.cancelAtNextBillingDate && (
+          <CancelSubscriptionDialog {...cancelSubscription} />
+        )}
+        
+        {currentPlan && currentPlan.cancelAtNextBillingDate && (
+          <RestoreSubscriptionDialog subscriptionId={currentPlan.subscriptionId} />
+        )}
+
+        {/* Billing information */}
+        {currentPlan && (
+          <div>
+            <div>Price: ${Number(currentPlanDetails?.price) / 100}</div>
+            <div>Next billing: {new Date(currentPlan.nextBillingDate).toLocaleDateString()}</div>
+          </div>
+        )}
+
+        {/* Plan features */}
+        <div>
+          {features.map((feature: string) => (
+            <div key={feature}>{feature}</div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+**Features:**
+- Current plan display with status badges
+- Conditional action buttons based on subscription state
+- Feature list from product metadata
+- Billing date display
+- Free tier fallback
+
+**State Handling:**
+- Shows "Upgrade Plan" button for free tier users
+- Shows "Change Plan" and "Cancel" for active subscriptions
+- Shows "Restore" button for cancelled subscriptions
+
+### Plan Management Dialogs
+
+#### UpdatePlanDialog
+
+Location: `components/dashboard/update-plan-dialog.tsx`
+
+Allows users to change or upgrade their subscription plan.
+
+```typescript
+export function UpdatePlanDialog({
+  triggerText,
+  currentPlan,
+  products,
+  onPlanChange,
+}: UpdatePlanDialogProps) {
+  const [selectedPlan, setSelectedPlan] = useState<string>("");
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button>{triggerText}</Button>
+      </DialogTrigger>
+
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Choose a Plan</DialogTitle>
+        </DialogHeader>
+
+        {/* Product selection */}
+        <RadioGroup value={selectedPlan} onValueChange={setSelectedPlan}>
+          {products.map((product) => (
+            <RadioGroupItem key={product.product_id} value={product.product_id}>
+              <div>
+                <h4>{product.name}</h4>
+                <p>${Number(product.price) / 100}/month</p>
+              </div>
+            </RadioGroupItem>
+          ))}
+        </RadioGroup>
+
+        <DialogFooter>
+          <Button onClick={() => onPlanChange(selectedPlan)}>
+            Confirm Change
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+#### CancelSubscriptionDialog
+
+Location: `components/dashboard/cancel-subscription-dialog.tsx`
+
+Confirmation dialog for subscription cancellation.
+
+```typescript
+export function CancelSubscriptionDialog(props: CancelSubscriptionDialogProps) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="destructive">Cancel Subscription</Button>
+      </AlertDialogTrigger>
+
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{props.title}</AlertDialogTitle>
+          <AlertDialogDescription>{props.description}</AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="text-destructive">
+          <p>{props.warningTitle}</p>
+          <p>{props.warningText}</p>
+        </div>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
+          <AlertDialogAction onClick={() => props.onCancel(props.plan?.subscriptionId)}>
+            Confirm Cancellation
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+```
+
+#### RestoreSubscriptionDialog
+
+Location: `components/dashboard/restore-subscription-dialog.tsx`
+
+Allows users to restore a cancelled subscription.
+
+```typescript
+export function RestoreSubscriptionDialog({ subscriptionId }: { subscriptionId: string }) {
+  const handleRestore = async () => {
+    const res = await restoreSubscription({ subscriptionId });
+    if (res.success) {
+      toast.success("Subscription restored");
+      window.location.reload();
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  return (
+    <Button onClick={handleRestore} variant="default">
+      Restore Subscription
+    </Button>
+  );
+}
+```
+
+### InvoiceHistory
+
+Location: `components/dashboard/invoice-history.tsx`
+
+Displays payment invoice history in a table.
+
+```typescript
+export function InvoiceHistory({ invoices }: { invoices: SelectPayment[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Invoice History</CardTitle>
+      </CardHeader>
+
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Invoice</TableHead>
+            </TableRow>
+          </TableHeader>
+
+          <TableBody>
+            {invoices.map((invoice) => (
+              <TableRow key={invoice.paymentId}>
+                <TableCell>
+                  {new Date(invoice.createdAt).toLocaleDateString()}
+                </TableCell>
+                <TableCell>
+                  ${invoice.totalAmount} {invoice.currency}
+                </TableCell>
+                <TableCell>
+                  <Badge>{invoice.status}</Badge>
+                </TableCell>
+                <TableCell>
+                  {invoice.paymentLink && (
+                    <a href={invoice.paymentLink} target="_blank">
+                      View
+                    </a>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+### AccountManagement
+
+Location: `components/dashboard/account-management.tsx`
+
+User account settings and danger zone.
+
+```typescript
+export function AccountManagement({
+  user,
+  userSubscription,
+}: AccountManagementProps) {
+  const handleDeleteAccount = async () => {
+    const res = await deleteAccount();
+    if (res.success) {
+      window.location.href = "/";
+    } else {
+      toast.error(res.error);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Account Settings</CardTitle>
+      </CardHeader>
+
+      <CardContent>
+        {/* User info */}
+        <div>
+          <p>Email: {user.email}</p>
+          <p>Name: {user.user_metadata.name}</p>
+        </div>
+
+        {/* Danger zone */}
+        <div className="border-destructive">
+          <h3>Danger Zone</h3>
+          <Button variant="destructive" onClick={handleDeleteAccount}>
+            Delete Account
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+## Layout Components
+
+### Header
+
+Location: `components/layout/header.tsx`
+
+Application header with navigation and user menu.
+
+```typescript
+export default function Header() {
+  return (
+    <header>
+      <nav>
+        <Link href="/">Home</Link>
+        <Link href="/dashboard">Dashboard</Link>
+      </nav>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger>
+          <Avatar />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>Profile</DropdownMenuItem>
+          <DropdownMenuItem>Sign Out</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </header>
+  );
+}
+```
+
+## UI Components
+
+Location: `components/ui/`
+
+Shadcn/ui components providing consistent design system:
+
+- **button.tsx** - Button variants and sizes
+- **card.tsx** - Card container with header/content
+- **dialog.tsx** - Modal dialogs
+- **alert-dialog.tsx** - Confirmation dialogs
+- **table.tsx** - Data tables
+- **tabs.tsx** - Tab navigation
+- **badge.tsx** - Status badges
+- **input.tsx** - Form inputs
+- **select.tsx** - Dropdown selects
+- **skeleton.tsx** - Loading placeholders
+
+## Component Patterns
+
+### Client vs Server Components
+
+**Client Components** (`"use client"`)
+- Interactive components with state
+- Event handlers
+- Browser APIs
+- React hooks
+
+**Server Components** (default)
+- Data fetching
+- Direct database access
+- No client-side JavaScript
+
+### Props Pattern
+
+Components receive typed props for type safety:
+
+```typescript
+interface ComponentProps {
+  data: DataType;
+  onAction: (id: string) => Promise<void>;
+  className?: string;
+}
+
+export function Component({ data, onAction, className }: ComponentProps) {
+  // Component logic
+}
+```
+
+### Error Handling
+
+Components handle errors using toast notifications:
+
+```typescript
+import { toast } from "sonner";
+
+const handleAction = async () => {
+  const res = await serverAction();
+  if (res.success) {
+    toast.success("Action completed");
+  } else {
+    toast.error(res.error);
+  }
+};
+```
+
+### Loading States
+
+Components show loading states during async operations:
+
+```typescript
+const [loading, setLoading] = useState(false);
+
+const handleAction = async () => {
+  setLoading(true);
+  await serverAction();
+  setLoading(false);
+};
+
+return (
+  <Button disabled={loading}>
+    {loading ? <Spinner /> : "Submit"}
+  </Button>
+);
+```
+
+## Styling
+
+Components use Tailwind CSS with cn() utility for conditional classes:
+
+```typescript
+import { cn } from "@/lib/utils";
+
+<div className={cn(
+  "base-classes",
+  variant === "primary" && "primary-classes",
+  className
+)}>
+```
+
+## Responsive Design
+
+Components use responsive Tailwind classes:
+
+```typescript
+<div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+  {/* Mobile: column, Desktop: row */}
+</div>
+```
+
+## Animation
+
+Components use Framer Motion for animations:
+
+```typescript
+import { motion } from "framer-motion";
+
+<motion.div
+  animate={{ opacity: 1 }}
+  initial={{ opacity: 0 }}
+  transition={{ duration: 0.3 }}
+>
+```

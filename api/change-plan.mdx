@@ -1,0 +1,259 @@
+---
+title: 'changePlan'
+description: 'Changes a subscription to a different product plan'
+---
+
+## Overview
+
+The `changePlan` function changes an existing subscription to a different product plan. It handles prorated billing immediately when the plan is changed.
+
+## Function Signature
+
+```typescript
+export async function changePlan(props: {
+  subscriptionId: string;
+  productId: string;
+}): ServerActionRes
+```
+
+## Parameters
+
+<ParamField path="subscriptionId" type="string" required>
+  The ID of the subscription to change
+</ParamField>
+
+<ParamField path="productId" type="string" required>
+  The ID of the new product/plan to switch to
+</ParamField>
+
+## Return Value
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the operation was successful
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the operation failed. Contains the specific error message from the Dodo Payments API or "An unknown error occurred" for unexpected errors.
+</ResponseField>
+
+## Implementation Details
+
+The function:
+
+1. Calls the Dodo Payments API to change the subscription plan
+2. Uses `prorated_immediately` billing mode - charges/credits are applied immediately
+3. Sets quantity to 1 (single subscription unit)
+4. Returns success if the plan change completes
+5. Returns detailed error messages if the operation fails
+
+### Proration Behavior
+
+The function uses `proration_billing_mode: "prorated_immediately"`, which means:
+
+- If upgrading to a more expensive plan, the customer is charged the prorated difference immediately
+- If downgrading to a cheaper plan, the customer receives a prorated credit applied to the next invoice
+- The next billing date remains the same
+
+## Error Handling
+
+- Returns `{ success: false, error: <message> }` with the actual error message from Dodo Payments
+- Returns `{ success: false, error: "An unknown error occurred" }` for unexpected errors
+- All exceptions are caught and converted to structured error responses
+
+## Usage Example
+
+```typescript
+import { changePlan } from '@/actions/change-plan';
+import { getUserSubscription } from '@/actions/get-user-subscription';
+
+export default async function UpgradeHandler() {
+  // Get current subscription
+  const subResult = await getUserSubscription();
+  
+  if (!subResult.success || !subResult.data.subscription) {
+    return <div>No active subscription</div>;
+  }
+
+  const subscriptionId = subResult.data.subscription.subscriptionId;
+  const newProductId = 'prod_premium_monthly';
+
+  // Change to new plan
+  const result = await changePlan({
+    subscriptionId,
+    productId: newProductId
+  });
+
+  if (!result.success) {
+    return <div>Error changing plan: {result.error}</div>;
+  }
+
+  return <div>Plan changed successfully!</div>;
+}
+```
+
+## Client Component Example
+
+```typescript
+'use client';
+
+import { changePlan } from '@/actions/change-plan';
+import { useState } from 'react';
+
+export function PlanChanger({ subscriptionId, currentProductId }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleChangePlan = async (newProductId: string) => {
+    if (newProductId === currentProductId) {
+      alert('You are already on this plan');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to change your plan? You will be charged or credited immediately.')) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const result = await changePlan({
+      subscriptionId,
+      productId: newProductId
+    });
+
+    if (result.success) {
+      alert('Plan changed successfully!');
+      window.location.reload(); // Refresh to show new plan
+    } else {
+      setError(result.error);
+    }
+
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      {error && <div className="text-red-600">{error}</div>}
+      <button
+        onClick={() => handleChangePlan('prod_basic_monthly')}
+        disabled={loading}
+      >
+        Change to Basic Plan
+      </button>
+      <button
+        onClick={() => handleChangePlan('prod_premium_monthly')}
+        disabled={loading}
+      >
+        Change to Premium Plan
+      </button>
+    </div>
+  );
+}
+```
+
+## Upgrade/Downgrade Flow
+
+```typescript
+import { changePlan } from '@/actions/change-plan';
+import { getUserSubscription } from '@/actions/get-user-subscription';
+import { getProducts } from '@/actions/get-products';
+
+export default async function ChangePlanPage({ searchParams }) {
+  const targetProductId = searchParams.product;
+
+  // Get current subscription
+  const subResult = await getUserSubscription();
+  if (!subResult.success || !subResult.data.subscription) {
+    return <div>You need an active subscription to change plans</div>;
+  }
+
+  // Get products to show current vs new plan
+  const productsResult = await getProducts();
+  if (!productsResult.success) {
+    return <div>Error loading products</div>;
+  }
+
+  const currentProduct = productsResult.data.find(
+    p => p.product_id === subResult.data.subscription.productId
+  );
+  const targetProduct = productsResult.data.find(
+    p => p.product_id === targetProductId
+  );
+
+  if (!targetProduct) {
+    return <div>Invalid product selected</div>;
+  }
+
+  return (
+    <div>
+      <h1>Change Plan</h1>
+      <div>
+        <h2>Current Plan</h2>
+        <p>{currentProduct?.name} - {currentProduct?.price} {currentProduct?.currency}</p>
+      </div>
+      <div>
+        <h2>New Plan</h2>
+        <p>{targetProduct.name} - {targetProduct.price} {targetProduct.currency}</p>
+      </div>
+      <form action={async () => {
+        'use server';
+        await changePlan({
+          subscriptionId: subResult.data.subscription.subscriptionId,
+          productId: targetProductId
+        });
+      }}>
+        <button type="submit">Confirm Plan Change</button>
+      </form>
+    </div>
+  );
+}
+```
+
+## With Confirmation Dialog
+
+```typescript
+'use client';
+
+import { changePlan } from '@/actions/change-plan';
+import { useRouter } from 'next/navigation';
+
+export function PlanChangeButton({ subscriptionId, productId, productName, isUpgrade }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = async () => {
+    const action = isUpgrade ? 'upgrade' : 'downgrade';
+    const message = `Are you sure you want to ${action} to ${productName}? ${isUpgrade ? 'You will be charged immediately.' : 'You will receive a credit on your next invoice.'}`;
+
+    if (!confirm(message)) return;
+
+    setLoading(true);
+    const result = await changePlan({ subscriptionId, productId });
+
+    if (result.success) {
+      alert('Plan changed successfully!');
+      router.refresh();
+    } else {
+      alert(`Error: ${result.error}`);
+    }
+
+    setLoading(false);
+  };
+
+  return (
+    <button onClick={handleChange} disabled={loading}>
+      {loading ? 'Changing...' : `Change to ${productName}`}
+    </button>
+  );
+}
+```
+
+## Related Actions
+
+- [`getUserSubscription`](/api/get-user-subscription) - Gets current subscription details
+- [`getProducts`](/api/get-products) - Lists available products
+- [`cancelSubscription`](/api/cancel-subscription) - Cancels the subscription
+
+## Source Code
+
+Location: `actions/change-plan.ts:6`

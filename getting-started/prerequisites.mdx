@@ -1,0 +1,107 @@
+---
+title: Prerequisites
+description: Requirements before setting up the Dodo Supabase Subscription Starter
+---
+
+Before you begin setting up your subscription-based SaaS application, ensure you have the following accounts and tools ready.
+
+## Required Software
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node-js">
+    Version 18 or higher required for running the application
+  </Card>
+  <Card title="Git" icon="git">
+    For cloning the repository and version control
+  </Card>
+</CardGroup>
+
+### Package Manager
+
+You can use any of the following package managers:
+
+- **npm** (comes with Node.js)
+- **pnpm** (faster alternative)
+- **yarn** (classic or berry)
+- **bun** (v1.0 or higher - fastest option)
+
+## Required Accounts
+
+<Steps>
+  <Step title="Supabase Account">
+    Create a free account at [Supabase](https://app.supabase.com) for authentication and database hosting.
+
+    You'll need:
+    - A new Supabase project
+    - Project URL and API keys
+    - Database connection string
+  </Step>
+
+  <Step title="Dodo Payments Account">
+    Sign up at [Dodo Payments](https://dashboard.dodopayments.com) for subscription and payment processing.
+
+    You'll need:
+    - API key from Settings → API Keys
+    - Webhook secret from Settings → Webhooks
+  </Step>
+
+  <Step title="Google Cloud Console Account">
+    Create an account at [Google Cloud Console](https://console.cloud.google.com) for OAuth authentication.
+
+    You'll need:
+    - A Google Cloud project
+    - OAuth 2.0 Client ID and Secret
+    - Google+ API enabled
+  </Step>
+</Steps>
+
+## What You'll Build
+
+This starter kit includes:
+
+<AccordionGroup>
+  <Accordion title="Authentication">
+    Google OAuth integration via Supabase for secure user authentication
+  </Accordion>
+
+  <Accordion title="Payment Processing">
+    Complete subscription management with Dodo Payments, including plan selection and billing
+  </Accordion>
+
+  <Accordion title="Database Management">
+    PostgreSQL database with Drizzle ORM for users, subscriptions, and payments
+  </Accordion>
+
+  <Accordion title="Webhook Integration">
+    Real-time subscription lifecycle events handled via Supabase Edge Functions
+  </Accordion>
+
+  <Accordion title="Modern UI">
+    Built with Next.js 15, React 19, and Tailwind CSS for a responsive user experience
+  </Accordion>
+
+  <Accordion title="Dashboard">
+    Comprehensive subscription and billing management interface with invoice history
+  </Accordion>
+</AccordionGroup>
+
+## Technical Stack
+
+This starter kit uses:
+
+- **Framework**: Next.js 15 with Turbopack
+- **Runtime**: React 19
+- **Database**: PostgreSQL (via Supabase)
+- **ORM**: Drizzle ORM
+- **Authentication**: Supabase Auth
+- **Payments**: Dodo Payments
+- **Styling**: Tailwind CSS
+- **UI Components**: Radix UI
+
+<Note>
+  Make sure you have access to all three accounts (Supabase, Dodo Payments, and Google Cloud Console) before proceeding to the next step.
+</Note>
+
+## Next Steps
+
+Once you have all prerequisites ready, proceed to [Installation](/getting-started/installation) to clone the repository and install dependencies.

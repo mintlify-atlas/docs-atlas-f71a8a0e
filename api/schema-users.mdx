@@ -1,0 +1,250 @@
+---
+title: Users Table Schema
+description: Database schema reference for the users table
+---
+
+The `users` table stores core user account information and links to Dodo customer records.
+
+**Source:** `~/workspace/source/lib/drizzle/schema.ts:12-28`
+
+## Table Definition
+
+```typescript
+export const users = pgTable("users", {
+  supabaseUserId: text("supabase_user_id").primaryKey(),
+  dodoCustomerId: text("dodo_customer_id").notNull(),
+  currentSubscriptionId: text("current_subscription_id"),
+  createdAt: timestamp("created_at", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  updatedAt: timestamp("updated_at", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  deletedAt: timestamp("deleted_at", {
+    mode: "string",
+    withTimezone: true,
+  }),
+});
+```
+
+## Fields
+
+<ResponseField name="supabase_user_id" type="text" required>
+  **Primary Key**
+  
+  Supabase authentication user ID. Links to Supabase Auth.
+  
+  This is the unique identifier for each user in your application.
+</ResponseField>
+
+<ResponseField name="dodo_customer_id" type="text" required>
+  Dodo Payments customer identifier.
+  
+  Used in webhook handlers to identify the customer when processing payment and subscription events.
+  
+  **Referenced in:** 
+  - `updateUserTier()` at supabase/functions/dodo-webhook/index.ts:208
+  - `downgradeToHobbyPlan()` at supabase/functions/dodo-webhook/index.ts:216
+</ResponseField>
+
+<ResponseField name="current_subscription_id" type="text">
+  **Nullable**
+  
+  References the active subscription ID from the `subscriptions` table.
+  
+  - Set to subscription ID when user has an active paid plan
+  - Set to `null` when user is on free tier or subscription ends
+  - Updated automatically by webhook events
+  
+  **Updated by webhook events:**
+  - `subscription.active` - Sets to new subscription ID
+  - `subscription.plan_changed` - Updates to new subscription ID
+  - `subscription.cancelled` - Sets to `null`
+  - `subscription.expired` - Sets to `null`
+  - `subscription.failed` - Sets to `null`
+</ResponseField>
+
+<ResponseField name="created_at" type="timestamp" required>
+  **With timezone**
+  
+  Timestamp when the user record was created.
+  
+  Stored as ISO 8601 string with timezone information.
+</ResponseField>
+
+<ResponseField name="updated_at" type="timestamp" required>
+  **With timezone**
+  
+  Timestamp when the user record was last updated.
+  
+  Stored as ISO 8601 string with timezone information.
+</ResponseField>
+
+<ResponseField name="deleted_at" type="timestamp">
+  **Nullable, With timezone**
+  
+  Soft delete timestamp. When set, indicates the user account has been deleted.
+  
+  Stored as ISO 8601 string with timezone information.
+</ResponseField>
+
+## Relations
+
+**Defined at:** lib/drizzle/schema.ts:111-117
+
+```typescript
+export const usersRelations = relations(users, ({ one, many }) => ({
+  currentSubscription: one(subscriptions, {
+    fields: [users.currentSubscriptionId],
+    references: [subscriptions.subscriptionId],
+  }),
+  subscriptions: many(subscriptions),
+}));
+```
+
+### currentSubscription (one-to-one)
+
+Links to the user's current active subscription.
+
+<ResponseField name="Related Table" type="subscriptions">
+  Foreign key: `users.current_subscription_id` → `subscriptions.subscription_id`
+</ResponseField>
+
+### subscriptions (one-to-many)
+
+All subscriptions associated with this user (historical and current).
+
+<ResponseField name="Related Table" type="subscriptions">
+  Inverse relation through `subscriptions.user_id`
+</ResponseField>
+
+## TypeScript Types
+
+**Defined at:** lib/drizzle/schema.ts:126-127
+
+```typescript
+export type SelectUser = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+```
+
+### SelectUser
+
+Type for reading user records from the database.
+
+```typescript
+type SelectUser = {
+  supabaseUserId: string;
+  dodoCustomerId: string;
+  currentSubscriptionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+```
+
+### InsertUser
+
+Type for inserting new user records.
+
+```typescript
+type InsertUser = {
+  supabaseUserId: string;
+  dodoCustomerId: string;
+  currentSubscriptionId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+```
+
+## Usage in Webhook Handlers
+
+### Updating User Subscription Status
+
+When subscription becomes active (webhook events: `subscription.active`, `subscription.plan_changed`):
+
+```typescript
+const { error } = await supabase
+  .from("users")
+  .update({ current_subscription_id: subscriptionId })
+  .eq("dodo_customer_id", dodoCustomerId);
+```
+
+**Source:** supabase/functions/dodo-webhook/index.ts:205-208
+
+### Downgrading User to Free Tier
+
+When subscription ends (webhook events: `subscription.cancelled`, `subscription.expired`, `subscription.failed`):
+
+```typescript
+const { error } = await supabase
+  .from("users")
+  .update({ current_subscription_id: null })
+  .eq("dodo_customer_id", dodoCustomerId);
+```
+
+**Source:** supabase/functions/dodo-webhook/index.ts:215-217
+
+## Query Examples
+
+### Get User with Current Subscription
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { users, subscriptions } from "@/lib/drizzle/schema";
+import { eq } from "drizzle-orm";
+
+const user = await db
+  .select()
+  .from(users)
+  .leftJoin(
+    subscriptions,
+    eq(users.currentSubscriptionId, subscriptions.subscriptionId)
+  )
+  .where(eq(users.supabaseUserId, userId))
+  .limit(1);
+```
+
+### Get All Active Subscribers
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { users } from "@/lib/drizzle/schema";
+import { isNotNull } from "drizzle-orm";
+
+const activeSubscribers = await db
+  .select()
+  .from(users)
+  .where(isNotNull(users.currentSubscriptionId));
+```
+
+### Check User Subscription Status
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { users } from "@/lib/drizzle/schema";
+import { eq } from "drizzle-orm";
+
+const [user] = await db
+  .select({
+    hasSubscription: users.currentSubscriptionId,
+  })
+  .from(users)
+  .where(eq(users.supabaseUserId, userId))
+  .limit(1);
+
+const isPaidUser = user?.hasSubscription !== null;
+```
+
+## Related Tables
+
+<CardGroup cols={2}>
+  <Card title="Subscriptions Schema" icon="repeat" href="/api/schema-subscriptions">
+    View the subscriptions table schema
+  </Card>
+  <Card title="Payments Schema" icon="credit-card" href="/api/schema-payments">
+    View the payments table schema
+  </Card>
+</CardGroup>

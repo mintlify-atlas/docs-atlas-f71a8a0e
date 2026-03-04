@@ -1,0 +1,200 @@
+---
+title: 'createDodoCustomer'
+description: 'Creates a new customer in Dodo Payments'
+---
+
+## Overview
+
+The `createDodoCustomer` function creates a new customer record in Dodo Payments. This function is typically called during user registration to set up payment capabilities.
+
+## Function Signature
+
+```typescript
+export async function createDodoCustomer(props: {
+  email: string;
+  name?: string;
+}): ServerActionRes<Customer>
+```
+
+## Parameters
+
+<ParamField path="email" type="string" required>
+  The customer's email address. Used as the primary identifier and for sending invoices.
+</ParamField>
+
+<ParamField path="name" type="string">
+  The customer's full name. If not provided, defaults to the username portion of the email (before @).
+</ParamField>
+
+## Return Value
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the operation was successful
+</ResponseField>
+
+<ResponseField name="data" type="Customer">
+  The created Dodo Payments customer object containing:
+  
+  <ResponseField name="customer_id" type="string">
+    Unique customer identifier in Dodo Payments
+  </ResponseField>
+  
+  <ResponseField name="email" type="string">
+    Customer's email address
+  </ResponseField>
+  
+  <ResponseField name="name" type="string">
+    Customer's name
+  </ResponseField>
+  
+  And other Dodo Payments Customer fields...
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the operation failed:
+  - "Failed to create customer" - Customer creation in Dodo Payments failed
+</ResponseField>
+
+## Implementation Details
+
+The function:
+
+1. Accepts email (required) and name (optional) parameters
+2. If name is not provided, extracts the username from the email (text before @)
+3. Calls the Dodo Payments API to create a new customer
+4. Returns the complete customer object on success
+5. Catches and handles any API errors
+
+## Error Handling
+
+- Returns `{ success: false, error: "Failed to create customer" }` if the Dodo API call fails
+- All exceptions are caught and converted to structured error responses
+- Does not throw exceptions, making it safe to use in Server Components
+
+## Usage Example
+
+```typescript
+import { createDodoCustomer } from '@/actions/create-dodo-customer';
+
+export default async function OnboardingHandler() {
+  const result = await createDodoCustomer({
+    email: 'user@example.com',
+    name: 'John Doe'
+  });
+
+  if (!result.success) {
+    console.error('Failed to create customer:', result.error);
+    return;
+  }
+
+  const customer = result.data;
+  console.log('Customer created:', customer.customer_id);
+  
+  // Store customer_id in your database
+  // Associate with user record
+}
+```
+
+## Using with Default Name
+
+```typescript
+import { createDodoCustomer } from '@/actions/create-dodo-customer';
+
+// Name will default to "user" from "user@example.com"
+const result = await createDodoCustomer({
+  email: 'user@example.com'
+});
+
+if (result.success) {
+  console.log('Customer name:', result.data.name); // "user"
+}
+```
+
+## Client Component Example
+
+```typescript
+'use client';
+
+import { createDodoCustomer } from '@/actions/create-dodo-customer';
+import { useState } from 'react';
+
+export function CustomerSetupForm() {
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const result = await createDodoCustomer({ email, name });
+
+    if (result.success) {
+      alert('Customer created successfully!');
+      console.log('Customer ID:', result.data.customer_id);
+    } else {
+      alert(`Error: ${result.error}`);
+    }
+
+    setLoading(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        required
+      />
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Name (optional)"
+      />
+      <button type="submit" disabled={loading}>
+        {loading ? 'Creating...' : 'Create Customer'}
+      </button>
+    </form>
+  );
+}
+```
+
+## Integration with User Creation
+
+```typescript
+import { createDodoCustomer } from '@/actions/create-dodo-customer';
+import { db } from '@/lib/drizzle/client';
+import { users } from '@/lib/drizzle/schema';
+
+export async function setupNewUser(supabaseUserId: string, email: string, name: string) {
+  // First, create Dodo customer
+  const customerResult = await createDodoCustomer({ email, name });
+
+  if (!customerResult.success) {
+    throw new Error('Failed to create payment customer');
+  }
+
+  // Then, create user record with customer ID
+  await db.insert(users).values({
+    supabaseUserId,
+    dodoCustomerId: customerResult.data.customer_id,
+    currentSubscriptionId: '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  return customerResult.data;
+}
+```
+
+## Related Actions
+
+- [`createUser`](/api/create-user) - Creates a user record (calls this function internally)
+- [`getUser`](/api/get-user) - Retrieves the authenticated user
+
+## Source Code
+
+Location: `actions/create-dodo-customer.ts:7`

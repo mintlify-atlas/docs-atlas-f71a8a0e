@@ -1,0 +1,153 @@
+---
+title: 'getUser'
+description: 'Retrieves the currently authenticated Supabase user'
+---
+
+## Overview
+
+The `getUser` function retrieves the currently authenticated user from Supabase Auth. This is a fundamental function used throughout the application to verify authentication and access user data.
+
+## Function Signature
+
+```typescript
+export async function getUser(): ServerActionRes<User>
+```
+
+## Parameters
+
+This function does not accept any parameters. It automatically retrieves the user from the current Supabase session.
+
+## Return Value
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the operation was successful
+</ResponseField>
+
+<ResponseField name="data" type="User">
+  The Supabase user object containing:
+  
+  <ResponseField name="id" type="string">
+    Unique user identifier from Supabase Auth
+  </ResponseField>
+  
+  <ResponseField name="email" type="string">
+    User's email address
+  </ResponseField>
+  
+  <ResponseField name="user_metadata" type="object">
+    Additional user metadata (e.g., name, avatar)
+  </ResponseField>
+  
+  <ResponseField name="created_at" type="string">
+    Timestamp when the user was created
+  </ResponseField>
+  
+  And other Supabase User fields...
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the operation failed. Possible values:
+  - "User not found" - No authenticated session exists
+  - "Failed to get user" - Generic error during retrieval
+</ResponseField>
+
+## Implementation Details
+
+The function:
+
+1. Creates a Supabase server client
+2. Calls `supabase.auth.getUser()` to retrieve the authenticated user
+3. Returns the user data if found
+4. Catches and handles any errors that occur
+
+## Error Handling
+
+- Returns `{ success: false, error: "User not found" }` if no user is authenticated
+- Returns `{ success: false, error: "Failed to get user" }` if an exception occurs
+- All errors are caught and returned as structured responses
+
+## Usage Example
+
+```typescript
+import { getUser } from '@/actions/get-user';
+
+export default async function ProfilePage() {
+  const result = await getUser();
+
+  if (!result.success) {
+    return <div>Please log in to continue</div>;
+  }
+
+  const user = result.data;
+
+  return (
+    <div>
+      <h1>Welcome, {user.user_metadata.name || user.email}</h1>
+      <p>User ID: {user.id}</p>
+      <p>Email: {user.email}</p>
+    </div>
+  );
+}
+```
+
+## Middleware Protection Example
+
+```typescript
+import { getUser } from '@/actions/get-user';
+import { redirect } from 'next/navigation';
+
+export default async function ProtectedPage() {
+  const result = await getUser();
+
+  if (!result.success) {
+    redirect('/login');
+  }
+
+  // User is authenticated, render protected content
+  return <div>Protected Content</div>;
+}
+```
+
+## Client Component Example
+
+```typescript
+'use client';
+
+import { getUser } from '@/actions/get-user';
+import { useEffect, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
+
+export function UserProfile() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getUser().then(result => {
+      if (result.success) {
+        setUser(result.data);
+      }
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
+  if (!user) return <div>Not logged in</div>;
+
+  return (
+    <div>
+      <p>Email: {user.email}</p>
+      <p>ID: {user.id}</p>
+    </div>
+  );
+}
+```
+
+## Related Actions
+
+- [`createUser`](/api/create-user) - Creates a user record in the database
+- [`getUserSubscription`](/api/get-user-subscription) - Gets user subscription details
+- [`deleteAccount`](/api/delete-account) - Deletes the user account
+
+## Source Code
+
+Location: `actions/get-user.ts:7`

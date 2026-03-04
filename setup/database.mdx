@@ -1,0 +1,249 @@
+---
+title: Database Schema Setup
+description: Set up your PostgreSQL database schema using Drizzle ORM
+---
+
+## Overview
+
+The application uses Drizzle ORM to manage the PostgreSQL database hosted on Supabase. This guide explains the database schema and how to push it to your Supabase project.
+
+## Prerequisites
+
+- Supabase project created (see [Supabase Setup](/setup/supabase))
+- `DATABASE_URL` configured in your `.env.local` file
+- Dependencies installed (`npm install`, `pnpm install`, or `bun install`)
+
+## Database Schema
+
+The application uses three main tables: `users`, `subscriptions`, and `payments`.
+
+### Users Table
+
+Stores user account information and links to Dodo Payments customer records.
+
+```typescript
+users {
+  supabaseUserId: string (primary key)
+  dodoCustomerId: string
+  currentSubscriptionId: string | null
+  createdAt: timestamp
+  updatedAt: timestamp
+  deletedAt: timestamp | null
+}
+```
+
+**Key fields:**
+- `supabaseUserId`: Links to Supabase Auth user
+- `dodoCustomerId`: Links to Dodo Payments customer ID
+- `currentSubscriptionId`: Reference to the user's active subscription
+
+### Subscriptions Table
+
+Stores all subscription data synchronized from Dodo Payments webhooks.
+
+```typescript
+subscriptions {
+  subscriptionId: string (primary key)
+  userId: string (foreign key → users.supabaseUserId)
+  recurringPreTaxAmount: number
+  taxInclusive: boolean
+  currency: string
+  status: string
+  createdAt: timestamp
+  productId: string
+  quantity: number
+  trialPeriodDays: number | null
+  subscriptionPeriodInterval: string
+  paymentPeriodInterval: string
+  subscriptionPeriodCount: number
+  paymentFrequencyCount: number
+  nextBillingDate: timestamp
+  previousBillingDate: timestamp
+  customerId: string
+  customerName: string | null
+  customerEmail: string
+  metadata: jsonb
+  discountId: string | null
+  cancelledAt: timestamp | null
+  cancelAtNextBillingDate: boolean
+  billing: jsonb
+  onDemand: boolean
+  addons: jsonb
+}
+```
+
+**Key fields:**
+- `status`: Subscription state (active, cancelled, expired, on_hold, etc.)
+- `nextBillingDate`: When the next payment will be charged
+- `productId`: Links to the Dodo Payments product
+- `metadata`: Custom data from Dodo Payments (includes features array)
+- `billing`: Customer billing address and information
+
+### Payments Table
+
+Stores all payment transactions and their details.
+
+```typescript
+payments {
+  paymentId: string (primary key)
+  status: string
+  totalAmount: number
+  currency: string
+  paymentMethod: string | null
+  paymentMethodType: string | null
+  customerId: string
+  customerName: string | null
+  customerEmail: string
+  createdAt: timestamp
+  subscriptionId: string
+  brandId: string
+  digitalProductDelivered: boolean
+  metadata: jsonb
+  webhookData: jsonb
+  billing: jsonb
+  businessId: string
+  cardIssuingCountry: string | null
+  cardLastFour: string | null
+  cardNetwork: string | null
+  cardType: string | null
+  discountId: string | null
+  disputes: jsonb
+  errorCode: string | null
+  errorMessage: string | null
+  paymentLink: string | null
+  productCart: jsonb
+  refunds: jsonb
+  settlementAmount: number | null
+  settlementCurrency: string | null
+  settlementTax: number | null
+  tax: number | null
+  updatedAt: timestamp | null
+}
+```
+
+**Key fields:**
+- `status`: Payment status (succeeded, failed, processing, cancelled)
+- `totalAmount`: Total payment amount including tax
+- `subscriptionId`: Links to the related subscription
+- `webhookData`: Complete webhook payload for debugging
+- `cardLastFour`: Last 4 digits of the payment card
+
+## Database Relations
+
+```typescript
+users.currentSubscription → subscriptions (one-to-one)
+users.subscriptions → subscriptions (one-to-many)
+subscriptions.user → users (many-to-one)
+```
+
+## Push Schema to Supabase
+
+<Steps>
+  <Step title="Verify DATABASE_URL">
+    Ensure your `.env.local` file has the correct database connection string:
+
+    ```env
+    DATABASE_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
+    ```
+
+    <Warning>
+      Replace `[password]` with your actual database password and `[project-ref]` with your Supabase project reference.
+    </Warning>
+  </Step>
+
+  <Step title="Run the migration command">
+    Push the schema to your Supabase database:
+
+    <CodeGroup>
+      ```bash npm
+      npm run db:push
+      ```
+
+      ```bash pnpm
+      pnpm run db:push
+      ```
+
+      ```bash bun
+      bun run db:push
+      ```
+    </CodeGroup>
+
+    This command uses Drizzle Kit to create the tables directly in your database without generating migration files.
+  </Step>
+
+  <Step title="Verify table creation">
+    To verify the tables were created successfully:
+
+    1. Go to your Supabase project dashboard
+    2. Navigate to **Database** → **Tables**
+    3. You should see three new tables: `users`, `subscriptions`, and `payments`
+  </Step>
+</Steps>
+
+## Drizzle Configuration
+
+The database configuration is defined in `drizzle.config.ts`:
+
+```typescript
+import { defineConfig } from "drizzle-kit";
+
+export default defineConfig({
+  schema: "./lib/drizzle/schema.ts",
+  out: "./lib/drizzle/migrations",
+  dialect: "postgresql",
+  dbCredentials: {
+    url: process.env.DATABASE_URL!,
+  },
+});
+```
+
+## Additional Drizzle Commands
+
+### Generate Migration Files
+
+If you prefer to use migration files instead of direct schema push:
+
+```bash
+npm run db:generate
+```
+
+This creates migration SQL files in `lib/drizzle/migrations/`.
+
+### Apply Migrations
+
+Apply generated migration files:
+
+```bash
+npm run db:migrate
+```
+
+### Drizzle Studio
+
+Open Drizzle Studio to visually browse and edit your database:
+
+```bash
+npm run db:studio
+```
+
+This launches a web interface at `https://local.drizzle.studio`.
+
+## Schema Location
+
+The complete schema definition is located at:
+
+```
+lib/drizzle/schema.ts
+```
+
+You can modify this file to add custom fields or tables as needed. After making changes, run `db:push` again to update your database.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Webhooks" icon="webhook" href="./webhooks">
+    Deploy webhook handlers to sync payment data
+  </Card>
+  <Card title="Google OAuth" icon="google" href="./google-oauth">
+    Configure user authentication
+  </Card>
+</CardGroup>

@@ -1,0 +1,329 @@
+---
+title: 'getInvoices'
+description: 'Retrieves all payment invoices for the authenticated user'
+---
+
+## Overview
+
+The `getInvoices` function retrieves all payment records (invoices) for the currently authenticated user from the database. This includes successful payments, failed payments, and refunds.
+
+## Function Signature
+
+```typescript
+export async function getInvoices(): ServerActionRes<SelectPayment[]>
+```
+
+## Parameters
+
+This function does not accept any parameters. It automatically retrieves invoices for the authenticated user.
+
+## Return Value
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the operation was successful
+</ResponseField>
+
+<ResponseField name="data" type="SelectPayment[]">
+  An array of payment records:
+  
+  <ResponseField name="paymentId" type="string">
+    Unique payment identifier
+  </ResponseField>
+  
+  <ResponseField name="status" type="string">
+    Payment status (e.g., "succeeded", "failed", "refunded")
+  </ResponseField>
+  
+  <ResponseField name="totalAmount" type="number">
+    Total payment amount
+  </ResponseField>
+  
+  <ResponseField name="currency" type="string">
+    Currency code (e.g., "USD", "EUR")
+  </ResponseField>
+  
+  <ResponseField name="paymentMethod" type="string | null">
+    Payment method used
+  </ResponseField>
+  
+  <ResponseField name="paymentMethodType" type="string | null">
+    Type of payment method (e.g., "card", "bank_transfer")
+  </ResponseField>
+  
+  <ResponseField name="customerId" type="string">
+    Dodo Payments customer ID
+  </ResponseField>
+  
+  <ResponseField name="customerName" type="string | null">
+    Customer's name
+  </ResponseField>
+  
+  <ResponseField name="customerEmail" type="string">
+    Customer's email address
+  </ResponseField>
+  
+  <ResponseField name="createdAt" type="string">
+    ISO timestamp when payment was created
+  </ResponseField>
+  
+  <ResponseField name="subscriptionId" type="string">
+    Associated subscription ID
+  </ResponseField>
+  
+  <ResponseField name="cardLastFour" type="string | null">
+    Last 4 digits of card (if card payment)
+  </ResponseField>
+  
+  <ResponseField name="cardNetwork" type="string | null">
+    Card network (e.g., "visa", "mastercard")
+  </ResponseField>
+  
+  <ResponseField name="tax" type="number | null">
+    Tax amount
+  </ResponseField>
+  
+  <ResponseField name="refunds" type="jsonb | null">
+    Refund information if applicable
+  </ResponseField>
+  
+  <ResponseField name="errorCode" type="string | null">
+    Error code if payment failed
+  </ResponseField>
+  
+  <ResponseField name="errorMessage" type="string | null">
+    Error message if payment failed
+  </ResponseField>
+  
+  And other payment fields...
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the operation failed:
+  - "Subscription not found" - User subscription data could not be retrieved
+  - "Failed to get invoices" - Database query failed
+</ResponseField>
+
+## Implementation Details
+
+The function:
+
+1. Retrieves the user's subscription data via `getUserSubscription()`
+2. Extracts the user's `dodoCustomerId` from the subscription data
+3. Queries the database for all payments matching the customer ID
+4. Returns the complete list of payment records
+5. Handles errors at each step
+
+## Error Handling
+
+- Returns `{ success: false, error: "Subscription not found" }` if user data cannot be retrieved
+- Returns `{ success: false, error: "Failed to get invoices" }` if database query fails
+- All exceptions are caught and converted to structured error responses
+
+## Usage Example
+
+```typescript
+import { getInvoices } from '@/actions/get-invoices';
+
+export default async function BillingHistoryPage() {
+  const result = await getInvoices();
+
+  if (!result.success) {
+    return <div>Error loading invoices: {result.error}</div>;
+  }
+
+  const invoices = result.data;
+
+  return (
+    <div>
+      <h1>Billing History</h1>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Card</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoices.map((invoice) => (
+            <tr key={invoice.paymentId}>
+              <td>{new Date(invoice.createdAt).toLocaleDateString()}</td>
+              <td>{invoice.totalAmount} {invoice.currency}</td>
+              <td>{invoice.status}</td>
+              <td>
+                {invoice.cardLastFour
+                  ? `${invoice.cardNetwork} ****${invoice.cardLastFour}`
+                  : invoice.paymentMethodType}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+```
+
+## Filtering by Status
+
+```typescript
+import { getInvoices } from '@/actions/get-invoices';
+
+export async function getSuccessfulInvoices() {
+  const result = await getInvoices();
+  
+  if (!result.success) {
+    return [];
+  }
+  
+  return result.data.filter(invoice => invoice.status === 'succeeded');
+}
+
+export async function getFailedInvoices() {
+  const result = await getInvoices();
+  
+  if (!result.success) {
+    return [];
+  }
+  
+  return result.data.filter(invoice => invoice.status === 'failed');
+}
+```
+
+## Client Component Example
+
+```typescript
+'use client';
+
+import { getInvoices } from '@/actions/get-invoices';
+import { useEffect, useState } from 'react';
+
+export function InvoiceList() {
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    getInvoices().then(result => {
+      if (result.success) {
+        setInvoices(result.data);
+      } else {
+        setError(result.error);
+      }
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return <div>Loading invoices...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (invoices.length === 0) return <div>No invoices yet</div>;
+
+  return (
+    <div>
+      {invoices.map((invoice) => (
+        <div key={invoice.paymentId} className="border p-4 mb-2 rounded">
+          <div className="flex justify-between">
+            <span>{new Date(invoice.createdAt).toLocaleDateString()}</span>
+            <span className="font-bold">
+              {invoice.totalAmount} {invoice.currency}
+            </span>
+          </div>
+          <div className="text-sm text-gray-600">
+            {invoice.status === 'succeeded' && (
+              <span className="text-green-600">Paid</span>
+            )}
+            {invoice.status === 'failed' && (
+              <span className="text-red-600">Failed</span>
+            )}
+            {invoice.cardLastFour && (
+              <span> - {invoice.cardNetwork} ****{invoice.cardLastFour}</span>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Calculating Total Spent
+
+```typescript
+import { getInvoices } from '@/actions/get-invoices';
+
+export async function calculateTotalSpent() {
+  const result = await getInvoices();
+  
+  if (!result.success) {
+    return 0;
+  }
+  
+  return result.data
+    .filter(invoice => invoice.status === 'succeeded')
+    .reduce((total, invoice) => total + invoice.totalAmount, 0);
+}
+```
+
+## Invoice Details with Download
+
+```typescript
+import { getInvoices } from '@/actions/get-invoices';
+
+export default async function InvoicesPage() {
+  const result = await getInvoices();
+
+  if (!result.success) {
+    return <div>Error: {result.error}</div>;
+  }
+
+  return (
+    <div>
+      <h1>Invoices</h1>
+      {result.data.map((invoice) => (
+        <div key={invoice.paymentId} className="border rounded p-4 mb-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="font-bold">
+                {invoice.totalAmount} {invoice.currency}
+              </h3>
+              <p className="text-sm text-gray-600">
+                {new Date(invoice.createdAt).toLocaleDateString()}
+              </p>
+              <p className="text-sm">
+                Status: <span className={invoice.status === 'succeeded' ? 'text-green-600' : 'text-red-600'}>
+                  {invoice.status}
+                </span>
+              </p>
+            </div>
+            {invoice.paymentLink && (
+              <a
+                href={invoice.paymentLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 text-sm"
+              >
+                View Invoice
+              </a>
+            )}
+          </div>
+          {invoice.errorMessage && (
+            <div className="mt-2 text-red-600 text-sm">
+              Error: {invoice.errorMessage}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Related Actions
+
+- [`getUserSubscription`](/api/get-user-subscription) - Gets user subscription details
+- [`getUser`](/api/get-user) - Retrieves the authenticated user
+
+## Source Code
+
+Location: `actions/get-invoices.ts:9`

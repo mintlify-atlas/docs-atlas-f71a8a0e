@@ -1,0 +1,390 @@
+---
+title: Webhook Events
+description: Complete reference for all Dodo Payments webhook events and payloads
+---
+
+This page documents all webhook events handled by the Dodo Supabase Subscription Starter kit.
+
+## Event Structure
+
+All webhook events follow this structure:
+
+```typescript
+{
+  type: string,        // Event type identifier
+  data: {
+    // Event-specific payload
+    customer: {
+      customer_id: string,
+      email: string,
+      name: string
+    },
+    // Additional fields...
+  }
+}
+```
+
+## Payment Events
+
+Payment events track the lifecycle of payment transactions.
+
+### payment.succeeded
+
+Fired when a payment is successfully completed.
+
+**Handler:** `managePayment()` at supabase/functions/dodo-webhook/index.ts:120
+
+<ParamField path="data.payment_id" type="string" required>
+  Unique identifier for the payment
+</ParamField>
+
+<ParamField path="data.status" type="string" required>
+  Payment status (e.g., "succeeded")
+</ParamField>
+
+<ParamField path="data.total_amount" type="number" required>
+  Total payment amount
+</ParamField>
+
+<ParamField path="data.currency" type="string" required>
+  Three-letter currency code (e.g., "USD")
+</ParamField>
+
+<ParamField path="data.payment_method" type="string">
+  Payment method identifier
+</ParamField>
+
+<ParamField path="data.payment_method_type" type="string">
+  Type of payment method (e.g., "card")
+</ParamField>
+
+<ParamField path="data.subscription_id" type="string" required>
+  Associated subscription identifier
+</ParamField>
+
+<ParamField path="data.customer" type="object" required>
+  Customer information object
+</ParamField>
+
+<ParamField path="data.customer.customer_id" type="string" required>
+  Dodo customer identifier
+</ParamField>
+
+<ParamField path="data.customer.email" type="string" required>
+  Customer email address
+</ParamField>
+
+<ParamField path="data.customer.name" type="string">
+  Customer name
+</ParamField>
+
+<ParamField path="data.created_at" type="string" required>
+  ISO 8601 timestamp of payment creation
+</ParamField>
+
+<ParamField path="data.updated_at" type="string">
+  ISO 8601 timestamp of last update
+</ParamField>
+
+<ParamField path="data.brand_id" type="string" required>
+  Brand identifier
+</ParamField>
+
+<ParamField path="data.business_id" type="string" required>
+  Business identifier
+</ParamField>
+
+<ParamField path="data.metadata" type="object">
+  Custom metadata object
+</ParamField>
+
+<ParamField path="data.billing" type="object">
+  Billing information object
+</ParamField>
+
+<ParamField path="data.card_last_four" type="string">
+  Last four digits of card number
+</ParamField>
+
+<ParamField path="data.card_network" type="string">
+  Card network (e.g., "Visa", "Mastercard")
+</ParamField>
+
+<ParamField path="data.card_type" type="string">
+  Card type (e.g., "credit", "debit")
+</ParamField>
+
+<ParamField path="data.card_issuing_country" type="string">
+  ISO country code of card issuer
+</ParamField>
+
+<ParamField path="data.tax" type="number">
+  Tax amount
+</ParamField>
+
+<ParamField path="data.settlement_amount" type="number">
+  Settlement amount in settlement currency
+</ParamField>
+
+<ParamField path="data.settlement_currency" type="string">
+  Currency code for settlement
+</ParamField>
+
+<ParamField path="data.settlement_tax" type="number">
+  Tax amount in settlement currency
+</ParamField>
+
+<ParamField path="data.discount_id" type="string">
+  Applied discount identifier
+</ParamField>
+
+<ParamField path="data.payment_link" type="string">
+  Payment link URL
+</ParamField>
+
+<ParamField path="data.product_cart" type="object">
+  Product cart details
+</ParamField>
+
+<ParamField path="data.refunds" type="object">
+  Refund information
+</ParamField>
+
+<ParamField path="data.disputes" type="object">
+  Dispute information
+</ParamField>
+
+### payment.failed
+
+Fired when a payment fails.
+
+**Handler:** `managePayment()` at supabase/functions/dodo-webhook/index.ts:120
+
+Includes all fields from `payment.succeeded` plus:
+
+<ParamField path="data.error_code" type="string">
+  Error code describing the failure
+</ParamField>
+
+<ParamField path="data.error_message" type="string">
+  Human-readable error message
+</ParamField>
+
+### payment.processing
+
+Fired when a payment is being processed.
+
+**Handler:** `managePayment()` at supabase/functions/dodo-webhook/index.ts:120
+
+Uses the same payload structure as `payment.succeeded`.
+
+### payment.cancelled
+
+Fired when a payment is cancelled.
+
+**Handler:** `managePayment()` at supabase/functions/dodo-webhook/index.ts:120
+
+Uses the same payload structure as `payment.succeeded`.
+
+## Subscription Events
+
+Subscription events track the lifecycle of recurring subscriptions.
+
+### subscription.active
+
+Fired when a subscription becomes active.
+
+**Handler:** `manageSubscription()` at supabase/functions/dodo-webhook/index.ts:164
+
+**Side Effect:** Updates user's `current_subscription_id` via `updateUserTier()` at line 201
+
+<ParamField path="data.subscription_id" type="string" required>
+  Unique identifier for the subscription
+</ParamField>
+
+<ParamField path="data.status" type="string" required>
+  Subscription status (e.g., "active")
+</ParamField>
+
+<ParamField path="data.product_id" type="string" required>
+  Product identifier
+</ParamField>
+
+<ParamField path="data.quantity" type="number" required>
+  Subscription quantity
+</ParamField>
+
+<ParamField path="data.recurring_pre_tax_amount" type="number" required>
+  Recurring amount before tax
+</ParamField>
+
+<ParamField path="data.tax_inclusive" type="boolean" required>
+  Whether pricing includes tax
+</ParamField>
+
+<ParamField path="data.currency" type="string" required>
+  Three-letter currency code
+</ParamField>
+
+<ParamField path="data.customer" type="object" required>
+  Customer information
+</ParamField>
+
+<ParamField path="data.customer.customer_id" type="string" required>
+  Dodo customer identifier
+</ParamField>
+
+<ParamField path="data.customer.email" type="string" required>
+  Customer email address
+</ParamField>
+
+<ParamField path="data.customer.name" type="string">
+  Customer name
+</ParamField>
+
+<ParamField path="data.created_at" type="string" required>
+  ISO 8601 timestamp of subscription creation
+</ParamField>
+
+<ParamField path="data.next_billing_date" type="string" required>
+  ISO 8601 timestamp of next billing
+</ParamField>
+
+<ParamField path="data.previous_billing_date" type="string" required>
+  ISO 8601 timestamp of previous billing
+</ParamField>
+
+<ParamField path="data.payment_frequency_interval" type="string">
+  Billing frequency interval (e.g., "month", "year")
+</ParamField>
+
+<ParamField path="data.payment_frequency_count" type="number">
+  Number of intervals between payments
+</ParamField>
+
+<ParamField path="data.subscription_period_interval" type="string">
+  Subscription period interval
+</ParamField>
+
+<ParamField path="data.subscription_period_count" type="number">
+  Number of subscription periods
+</ParamField>
+
+<ParamField path="data.trial_period_days" type="number">
+  Length of trial period in days
+</ParamField>
+
+<ParamField path="data.billing" type="object" required>
+  Billing information
+</ParamField>
+
+<ParamField path="data.metadata" type="object">
+  Custom metadata
+</ParamField>
+
+<ParamField path="data.discount_id" type="string">
+  Applied discount identifier
+</ParamField>
+
+<ParamField path="data.addons" type="object">
+  Subscription addons
+</ParamField>
+
+<ParamField path="data.on_demand" type="boolean">
+  Whether subscription is on-demand
+</ParamField>
+
+<ParamField path="data.cancel_at_next_billing_date" type="boolean">
+  Whether subscription will cancel at next billing
+</ParamField>
+
+<ParamField path="data.cancelled_at" type="string">
+  ISO 8601 timestamp of cancellation
+</ParamField>
+
+### subscription.plan_changed
+
+Fired when a subscription plan is changed (upgrade/downgrade).
+
+**Handler:** `manageSubscription()` at supabase/functions/dodo-webhook/index.ts:164
+
+**Side Effect:** Updates user's `current_subscription_id` via `updateUserTier()` at line 201
+
+Uses the same payload structure as `subscription.active`.
+
+### subscription.renewed
+
+Fired when a subscription is renewed.
+
+**Handler:** `manageSubscription()` at supabase/functions/dodo-webhook/index.ts:164
+
+Uses the same payload structure as `subscription.active`.
+
+### subscription.on_hold
+
+Fired when a subscription is placed on hold.
+
+**Handler:** `manageSubscription()` at supabase/functions/dodo-webhook/index.ts:164
+
+Uses the same payload structure as `subscription.active`.
+
+### subscription.cancelled
+
+Fired when a subscription is cancelled.
+
+**Handler:** `manageSubscription()` at supabase/functions/dodo-webhook/index.ts:164
+
+**Side Effect:** Sets user's `current_subscription_id` to `null` via `downgradeToHobbyPlan()` at line 214
+
+Uses the same payload structure as `subscription.active`.
+
+### subscription.expired
+
+Fired when a subscription expires.
+
+**Handler:** `manageSubscription()` at supabase/functions/dodo-webhook/index.ts:164
+
+**Side Effect:** Sets user's `current_subscription_id` to `null` via `downgradeToHobbyPlan()` at line 214
+
+Uses the same payload structure as `subscription.active`.
+
+### subscription.failed
+
+Fired when a subscription fails (e.g., payment failure).
+
+**Handler:** `manageSubscription()` at supabase/functions/dodo-webhook/index.ts:164
+
+**Side Effect:** Sets user's `current_subscription_id` to `null` via `downgradeToHobbyPlan()` at line 214
+
+Uses the same payload structure as `subscription.active`.
+
+## Event Flow Examples
+
+### New Subscription Flow
+
+1. `payment.processing` - Initial payment begins
+2. `payment.succeeded` - Payment completes
+3. `subscription.active` - Subscription activated, user tier updated
+
+### Subscription Cancellation Flow
+
+1. `subscription.cancelled` - Subscription cancelled, user downgraded
+2. Future payment events stop
+
+### Failed Payment Flow
+
+1. `payment.processing` - Payment attempt begins
+2. `payment.failed` - Payment fails with error details
+3. `subscription.failed` - Subscription marked as failed, user downgraded
+
+## Testing Webhooks
+
+During development, you can test webhook events using:
+
+1. **Dodo Dashboard:** Send test events from your Dodo Payments dashboard
+2. **Local Testing:** Use ngrok or similar to expose your local Supabase function
+3. **Replay Events:** Re-send previous webhook events from the Dodo dashboard
+
+<Note>
+  All webhook events are idempotent - replaying the same event will not create duplicates due to upsert operations.
+</Note>

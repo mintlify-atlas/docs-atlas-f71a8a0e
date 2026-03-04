@@ -1,0 +1,290 @@
+---
+title: 'restoreSubscription'
+description: 'Restores a subscription that was scheduled for cancellation'
+---
+
+## Overview
+
+The `restoreSubscription` function restores a subscription that was previously scheduled for cancellation. This removes the cancellation flag, and billing will resume normally at the next billing date.
+
+## Function Signature
+
+```typescript
+export async function restoreSubscription(props: {
+  subscriptionId: string;
+}): ServerActionRes
+```
+
+## Parameters
+
+<ParamField path="subscriptionId" type="string" required>
+  The ID of the subscription to restore
+</ParamField>
+
+## Return Value
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the operation was successful
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the operation failed. Contains the specific error message from the Dodo Payments API or "An unknown error occurred" for unexpected errors.
+</ResponseField>
+
+## Implementation Details
+
+The function:
+
+1. Calls the Dodo Payments API to update the subscription with `cancel_at_next_billing_date: false`
+2. Updates the local database to set `cancelAtNextBillingDate: false` on the subscription record
+3. The subscription will now continue and bill normally at the next billing date
+4. Returns success if both API call and database update complete
+
+### Restoration Behavior
+
+- Only works for subscriptions that were scheduled for cancellation (not already cancelled)
+- User's access is not interrupted (they already had access until next billing date)
+- Billing will resume normally on the next billing date
+- Can be called any time before the next billing date
+
+## Error Handling
+
+- Returns `{ success: false, error: <message> }` with the actual error message from Dodo Payments or database
+- Returns `{ success: false, error: "An unknown error occurred" }` for unexpected errors
+- All exceptions are caught and converted to structured error responses
+
+## Usage Example
+
+```typescript
+import { restoreSubscription } from '@/actions/restore-subscription';
+import { getUserSubscription } from '@/actions/get-user-subscription';
+
+export default async function RestoreHandler() {
+  // Get current subscription
+  const subResult = await getUserSubscription();
+  
+  if (!subResult.success || !subResult.data.subscription) {
+    return <div>No subscription found</div>;
+  }
+
+  const subscription = subResult.data.subscription;
+
+  if (!subscription.cancelAtNextBillingDate) {
+    return <div>Subscription is not scheduled for cancellation</div>;
+  }
+
+  // Restore the subscription
+  const result = await restoreSubscription({
+    subscriptionId: subscription.subscriptionId
+  });
+
+  if (!result.success) {
+    return <div>Error restoring subscription: {result.error}</div>;
+  }
+
+  return (
+    <div>
+      <p>Subscription restored successfully!</p>
+      <p>Billing will continue on {new Date(subscription.nextBillingDate).toLocaleDateString()}</p>
+    </div>
+  );
+}
+```
+
+## Client Component Example
+
+```typescript
+'use client';
+
+import { restoreSubscription } from '@/actions/restore-subscription';
+import { useState } from 'react';
+
+export function RestoreSubscriptionButton({ subscriptionId, nextBillingDate }) {
+  const [loading, setLoading] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleRestore = async () => {
+    const confirmed = confirm(
+      `Restore your subscription? You'll be billed on ${new Date(nextBillingDate).toLocaleDateString()}.`
+    );
+
+    if (!confirmed) return;
+
+    setLoading(true);
+    setError(null);
+
+    const result = await restoreSubscription({ subscriptionId });
+
+    if (result.success) {
+      setRestored(true);
+    } else {
+      setError(result.error);
+    }
+
+    setLoading(false);
+  };
+
+  if (restored) {
+    return (
+      <div className="text-green-600">
+        Subscription restored! Billing resumes on {new Date(nextBillingDate).toLocaleDateString()}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {error && <div className="text-red-600">{error}</div>}
+      <button
+        onClick={handleRestore}
+        disabled={loading}
+        className="bg-green-600 text-white px-4 py-2 rounded"
+      >
+        {loading ? 'Restoring...' : 'Restore Subscription'}
+      </button>
+    </div>
+  );
+}
+```
+
+## Conditional Restore Button
+
+```typescript
+import { getUserSubscription } from '@/actions/get-user-subscription';
+import { RestoreSubscriptionButton } from './restore-subscription-button';
+
+export default async function SubscriptionManagement() {
+  const result = await getUserSubscription();
+
+  if (!result.success || !result.data.subscription) {
+    return <div>No subscription found</div>;
+  }
+
+  const subscription = result.data.subscription;
+
+  // Only show restore option if subscription is scheduled for cancellation
+  if (!subscription.cancelAtNextBillingDate) {
+    return (
+      <div>
+        <p>Subscription is active</p>
+        <p>Next billing: {new Date(subscription.nextBillingDate).toLocaleDateString()}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4">
+        <h3>Subscription Cancelling</h3>
+        <p>Your subscription will end on {new Date(subscription.nextBillingDate).toLocaleDateString()}</p>
+      </div>
+      <RestoreSubscriptionButton
+        subscriptionId={subscription.subscriptionId}
+        nextBillingDate={subscription.nextBillingDate}
+      />
+    </div>
+  );
+}
+```
+
+## Win-back Flow
+
+```typescript
+'use client';
+
+import { restoreSubscription } from '@/actions/restore-subscription';
+import { useState } from 'react';
+
+export function WinbackOffer({ subscriptionId, nextBillingDate, discountCode }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleRestore = async () => {
+    setLoading(true);
+
+    const result = await restoreSubscription({ subscriptionId });
+
+    if (result.success) {
+      alert('Welcome back! Your subscription has been restored.');
+      window.location.href = '/dashboard';
+    } else {
+      alert(`Error: ${result.error}`);
+    }
+
+    setLoading(false);
+  };
+
+  return (
+    <div className="max-w-lg mx-auto p-6 border rounded-lg">
+      <h2 className="text-2xl font-bold mb-4">We'd Love to Have You Back!</h2>
+      <p className="mb-4">
+        Your subscription is scheduled to end on {new Date(nextBillingDate).toLocaleDateString()}.
+      </p>
+      {discountCode && (
+        <div className="bg-green-50 p-4 mb-4 rounded">
+          <p className="font-bold">Special Offer: 20% off your next 3 months!</p>
+          <p className="text-sm">Code: {discountCode}</p>
+        </div>
+      )}
+      <button
+        onClick={handleRestore}
+        disabled={loading}
+        className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold"
+      >
+        {loading ? 'Restoring...' : 'Restore My Subscription'}
+      </button>
+      <p className="text-sm text-gray-600 mt-2 text-center">
+        Billing resumes on {new Date(nextBillingDate).toLocaleDateString()}
+      </p>
+    </div>
+  );
+}
+```
+
+## Server Action Form Example
+
+```typescript
+import { restoreSubscription } from '@/actions/restore-subscription';
+import { getUserSubscription } from '@/actions/get-user-subscription';
+import { redirect } from 'next/navigation';
+
+export default async function RestorePage() {
+  const subResult = await getUserSubscription();
+
+  if (!subResult.success || !subResult.data.subscription) {
+    return <div>No subscription found</div>;
+  }
+
+  const subscription = subResult.data.subscription;
+
+  if (!subscription.cancelAtNextBillingDate) {
+    redirect('/account');
+  }
+
+  async function restore() {
+    'use server';
+    await restoreSubscription({ subscriptionId: subscription.subscriptionId });
+    redirect('/account?restored=true');
+  }
+
+  return (
+    <div>
+      <h1>Restore Your Subscription</h1>
+      <p>Your subscription ends on {new Date(subscription.nextBillingDate).toLocaleDateString()}</p>
+      <form action={restore}>
+        <button type="submit">Restore Subscription</button>
+      </form>
+    </div>
+  );
+}
+```
+
+## Related Actions
+
+- [`cancelSubscription`](/api/cancel-subscription) - Cancels a subscription
+- [`getUserSubscription`](/api/get-user-subscription) - Gets subscription status
+- [`changePlan`](/api/change-plan) - Changes to a different plan
+
+## Source Code
+
+Location: `actions/restore-subscription.ts:9`

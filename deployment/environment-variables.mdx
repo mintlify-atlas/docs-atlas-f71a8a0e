@@ -1,0 +1,395 @@
+---
+title: "Environment Variables"
+description: "Complete reference for all environment variables in the Dodo Supabase Subscription Starter"
+---
+
+## Overview
+
+The starter kit requires several environment variables to connect to Supabase, Dodo Payments, and enable authentication. All variables must be set in your `.env.local` file for local development and in your deployment platform (Vercel) for production.
+
+## Quick Setup
+
+Create a `.env.local` file in your project root:
+
+```bash
+cp .env.example .env.local
+```
+
+Then populate all required values based on the reference below.
+
+## Environment Variables Reference
+
+<Accordion title="Supabase Configuration">
+
+### NEXT_PUBLIC_SUPABASE_URL
+
+**Required**: Yes  
+**Type**: Public  
+**Example**: `https://abcdefghijklmno.supabase.co`
+
+Your Supabase project URL.
+
+**How to get it:**
+1. Go to [Supabase Dashboard](https://app.supabase.com)
+2. Select your project
+3. Go to **Settings** → **API**
+4. Copy the **Project URL**
+
+---
+
+### NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+**Required**: Yes  
+**Type**: Public  
+**Example**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+
+The anonymous/public key for client-side Supabase operations.
+
+**How to get it:**
+1. Go to [Supabase Dashboard](https://app.supabase.com)
+2. Select your project
+3. Go to **Settings** → **API**
+4. Copy the **anon public** key
+
+<Warning>
+  While this key is safe to expose in client-side code, ensure Row Level Security (RLS) policies are properly configured on all tables.
+</Warning>
+
+---
+
+### SUPABASE_SERVICE_ROLE_KEY
+
+**Required**: Yes  
+**Type**: Secret  
+**Example**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+
+The service role key with full database access. Used by the webhook function to write subscription and payment data.
+
+**How to get it:**
+1. Go to [Supabase Dashboard](https://app.supabase.com)
+2. Select your project
+3. Go to **Settings** → **API**
+4. Copy the **service_role** key (click "Reveal" first)
+
+<Warning>
+  **Never expose this key in client-side code or commit it to version control.** It bypasses Row Level Security and has full database access.
+</Warning>
+
+**Used by:**
+- Supabase Edge Function (webhook handler)
+- Server-side operations requiring elevated permissions
+
+</Accordion>
+
+<Accordion title="Database Configuration">
+
+### DATABASE_URL
+
+**Required**: Yes  
+**Type**: Secret  
+**Example**: `postgresql://postgres:password@db.abcdefghijklmno.supabase.co:5432/postgres`
+
+PostgreSQL connection string for Drizzle ORM migrations and schema management.
+
+**How to get it:**
+1. Go to [Supabase Dashboard](https://app.supabase.com)
+2. Select your project
+3. Go to **Settings** → **Database**
+4. Copy the **Connection String** under "Connection pooling"
+5. Replace `[YOUR-PASSWORD]` with your actual database password
+
+**Format:**
+```
+postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+```
+
+<Note>
+  If your password contains special characters, make sure to URL-encode them. For example, `@` becomes `%40`.
+</Note>
+
+**Used for:**
+- Running database migrations: `bun run db:push`
+- Schema generation: `bun run db:generate`
+- Database studio: `bun run db:studio`
+
+</Accordion>
+
+<Accordion title="Dodo Payments Configuration">
+
+### DODO_PAYMENTS_API_KEY
+
+**Required**: Yes  
+**Type**: Secret  
+**Example**: `dodo_test_abc123...` or `dodo_live_xyz789...`
+
+Your Dodo Payments API key for creating checkout sessions and managing subscriptions.
+
+**How to get it:**
+1. Go to [Dodo Payments Dashboard](https://dashboard.dodopayments.com)
+2. Navigate to **Settings** → **API Keys**
+3. Copy your **Test Mode** key for development or **Live Mode** key for production
+
+<Warning>
+  Use test mode keys during development. Only use live mode keys in production after thorough testing.
+</Warning>
+
+**Used for:**
+- Creating checkout sessions
+- Managing customer subscriptions
+- Retrieving product information
+- Processing payment operations
+
+---
+
+### DODO_WEBHOOK_SECRET
+
+**Required**: Yes  
+**Type**: Secret  
+**Example**: `whsec_abc123...`
+
+Secret key for verifying webhook signatures from Dodo Payments.
+
+**How to get it:**
+1. Go to [Dodo Payments Dashboard](https://dashboard.dodopayments.com)
+2. Navigate to **Settings** → **Webhooks**
+3. Add a new webhook endpoint or copy the secret from an existing one
+4. Copy the **Signing Secret**
+
+**Security:**
+This secret ensures webhooks are genuinely from Dodo Payments. The webhook function verifies every request signature before processing events.
+
+**Used by:**
+- Supabase Edge Function webhook handler
+- Webhook signature verification
+
+---
+
+### DODO_PAYMENTS_ENVIRONMENT
+
+**Required**: Yes  
+**Type**: Configuration  
+**Allowed Values**: `test_mode` or `live_mode`  
+**Example**: `test_mode`
+
+Determines whether to use Dodo Payments in test or live mode.
+
+**Values:**
+- `test_mode`: Use test API keys, no real charges
+- `live_mode`: Use live API keys, real charges processed
+
+<Warning>
+  **Always use `test_mode` during development.** Only switch to `live_mode` after:
+  - Complete testing of all payment flows
+  - Verifying webhook processing
+  - Confirming subscription lifecycle handling
+</Warning>
+
+**Environment-specific settings:**
+
+**Development:**
+```env
+DODO_PAYMENTS_ENVIRONMENT=test_mode
+DODO_PAYMENTS_API_KEY=dodo_test_...
+```
+
+**Production:**
+```env
+DODO_PAYMENTS_ENVIRONMENT=live_mode
+DODO_PAYMENTS_API_KEY=dodo_live_...
+```
+
+</Accordion>
+
+## Setting Up Environment Variables
+
+### Local Development
+
+1. Copy the example file:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. Fill in all required values:
+   ```env
+   # Supabase Configuration
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+   # Database URL
+   DATABASE_URL=postgresql://postgres:password@db.project-ref.supabase.co:5432/postgres
+
+   # Dodo Payments Configuration
+   DODO_PAYMENTS_API_KEY=dodo_test_your-api-key
+   DODO_WEBHOOK_SECRET=whsec_your-webhook-secret
+   DODO_PAYMENTS_ENVIRONMENT=test_mode
+   ```
+
+3. Restart your development server:
+   ```bash
+   bun run dev
+   ```
+
+### Vercel Deployment
+
+#### Via Dashboard
+
+1. Go to your Vercel project
+2. Navigate to **Settings** → **Environment Variables**
+3. Add each variable with appropriate scope:
+   - **Production**: For production deployments
+   - **Preview**: For pull request previews
+   - **Development**: For local development with `vercel dev`
+
+#### Via CLI
+
+```bash
+vercel env add NEXT_PUBLIC_SUPABASE_URL
+vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY
+vercel env add SUPABASE_SERVICE_ROLE_KEY
+vercel env add DATABASE_URL
+vercel env add DODO_PAYMENTS_API_KEY
+vercel env add DODO_WEBHOOK_SECRET
+vercel env add DODO_PAYMENTS_ENVIRONMENT
+```
+
+You'll be prompted to enter values and select environments for each variable.
+
+### Supabase Edge Function
+
+The webhook function also needs environment variables set in Supabase:
+
+1. Go to [Supabase Dashboard](https://app.supabase.com)
+2. Select your project
+3. Navigate to **Edge Functions** → **dodo-webhook** → **Settings**
+4. Add these environment variables:
+   - `SUPABASE_URL`: Same as `NEXT_PUBLIC_SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`: Your service role key
+   - `DODO_WEBHOOK_SECRET`: Your webhook secret
+
+<Note>
+  When deploying the webhook function, these variables are automatically available from your Supabase project if they're set in the Supabase dashboard.
+</Note>
+
+## Security Best Practices
+
+### Never Commit Secrets
+
+Ensure `.env.local` is in your `.gitignore`:
+
+```gitignore
+# .gitignore
+.env*.local
+.env
+```
+
+### Rotate Keys Regularly
+
+Periodically rotate sensitive keys:
+- Dodo Payments API keys
+- Webhook secrets
+- Service role keys
+
+### Use Different Keys Per Environment
+
+Maintain separate API keys for:
+- Local development (test mode)
+- Staging/preview (test mode)
+- Production (live mode)
+
+### Restrict Access
+
+Limit who has access to:
+- Production environment variables
+- Live mode API keys
+- Service role keys
+
+## Validation
+
+To verify all environment variables are correctly set, the application performs validation on startup.
+
+**Check for missing variables:**
+
+The app will fail to start if required variables are missing, with clear error messages indicating which variables need to be set.
+
+**Test database connection:**
+
+```bash
+bun run db:studio
+```
+
+This opens Drizzle Studio if the `DATABASE_URL` is valid.
+
+**Test Supabase connection:**
+
+Navigate to `/auth/login` and attempt to sign in. If authentication works, your Supabase configuration is correct.
+
+**Test Dodo Payments:**
+
+Create a test checkout session. If it redirects to Dodo Payments, your API key is valid.
+
+## Troubleshooting
+
+### "Missing environment variable" Error
+
+**Cause**: Required variable is not set or misspelled.
+
+**Solution**: 
+- Check `.env.local` file exists
+- Verify variable names match exactly (case-sensitive)
+- Restart development server after changes
+
+### Authentication Fails
+
+**Cause**: Incorrect Supabase URL or keys.
+
+**Solution**:
+- Verify `NEXT_PUBLIC_SUPABASE_URL` is correct
+- Ensure `NEXT_PUBLIC_SUPABASE_ANON_KEY` is the anon key, not service role
+- Check for trailing slashes or spaces in URL
+
+### Database Connection Error
+
+**Cause**: Invalid `DATABASE_URL` format or credentials.
+
+**Solution**:
+- Verify password is URL-encoded
+- Check project reference ID is correct
+- Ensure database is accessible (not paused)
+- Confirm connection string uses port 5432
+
+### Webhook Signature Verification Fails
+
+**Cause**: Incorrect `DODO_WEBHOOK_SECRET`.
+
+**Solution**:
+- Verify secret matches Dodo Payments dashboard
+- Ensure no extra spaces or newlines
+- Check webhook endpoint is using the correct secret
+- Confirm secret is set in Supabase Edge Function environment
+
+### Payment API Errors
+
+**Cause**: Invalid or missing `DODO_PAYMENTS_API_KEY`.
+
+**Solution**:
+- Confirm API key starts with `dodo_test_` or `dodo_live_`
+- Verify key matches the `DODO_PAYMENTS_ENVIRONMENT` setting
+- Check key hasn't been revoked in dashboard
+- Ensure no extra characters or spaces
+
+## Reference Summary
+
+| Variable | Required | Type | Used By |
+|----------|----------|------|----------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Public | Client, Server |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Public | Client, Server |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Secret | Server, Webhook |
+| `DATABASE_URL` | Yes | Secret | Drizzle ORM |
+| `DODO_PAYMENTS_API_KEY` | Yes | Secret | Server |
+| `DODO_WEBHOOK_SECRET` | Yes | Secret | Webhook |
+| `DODO_PAYMENTS_ENVIRONMENT` | Yes | Config | Server, Webhook |
+
+<Note>
+  **Public** variables are safe to expose in client-side code. **Secret** variables must never be exposed to the client.
+</Note>

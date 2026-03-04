@@ -1,0 +1,157 @@
+---
+title: "Project Structure"
+description: "Directory structure and organization of the Dodo Supabase Subscription Starter"
+---
+
+## Overview
+
+The Dodo Supabase Subscription Starter follows a modern Next.js App Router structure with clear separation of concerns for server actions, components, database logic, and integrations.
+
+## Root Directory Structure
+
+```
+~/workspace/source/
+├── actions/              # Server actions for data mutations
+├── app/                  # Next.js App Router pages and API routes
+│   ├── api/             # API route handlers
+│   │   └── auth/        # Authentication callbacks
+│   ├── checkout/        # Checkout route handler
+│   ├── dashboard/       # Dashboard page
+│   ├── login/           # Login page
+│   ├── layout.tsx       # Root layout
+│   └── page.tsx         # Home page
+├── assets/              # Static assets
+├── components/          # React components
+│   ├── auth/           # Authentication components
+│   ├── dashboard/      # Dashboard-specific components
+│   ├── layout/         # Layout components
+│   └── ui/             # Reusable UI components (shadcn/ui)
+├── hooks/               # Custom React hooks
+├── lib/                 # Library code and utilities
+│   ├── config/         # Configuration files
+│   ├── dodo-payments/  # Dodo Payments integration
+│   ├── drizzle/        # Database client and schema
+│   └── supabase/       # Supabase client utilities
+├── public/              # Public static files
+│   └── assets/         # Public assets
+├── supabase/            # Supabase configuration
+│   └── functions/      # Edge functions
+│       └── dodo-webhook/  # Webhook handler
+└── types/               # TypeScript type definitions
+```
+
+## Server Actions (`/actions`)
+
+Server actions handle all data mutations and business logic:
+
+- `cancel-subscription.ts` - Cancel user subscriptions
+- `change-plan.ts` - Update subscription plans
+- `create-dodo-customer.ts` - Create customers in Dodo Payments
+- `create-user.ts` - Initialize new users
+- `delete-account.ts` - Handle account deletion
+- `get-invoices.ts` - Fetch payment history
+- `get-products.ts` - Retrieve available products
+- `get-user-subscription.ts` - Get current subscription details
+- `get-user.ts` - Fetch authenticated user data
+- `restore-subscription.ts` - Restore cancelled subscriptions
+
+## App Routes
+
+### Pages
+- `/` - Landing page
+- `/login` - Authentication page
+- `/dashboard` - User dashboard (protected route)
+
+### API Routes
+- `/api/auth/callback` - OAuth callback handler
+- `/checkout` - Payment checkout handler (GET/POST)
+
+## Components Architecture
+
+### Authentication Components (`/components/auth`)
+- `google-signin.tsx` - Google OAuth sign-in button
+
+### Dashboard Components (`/components/dashboard`)
+- `dashboard.tsx` - Main dashboard container with tabbed interface
+- `subscription-management.tsx` - Subscription details and management
+- `invoice-history.tsx` - Payment invoice list
+- `account-management.tsx` - User account settings
+- `cancel-subscription-dialog.tsx` - Subscription cancellation dialog
+- `update-plan-dialog.tsx` - Plan upgrade/change dialog
+- `restore-subscription-dialog.tsx` - Restore cancelled subscription
+
+### Layout Components (`/components/layout`)
+- `header.tsx` - Application header with navigation
+
+### UI Components (`/components/ui`)
+Shadcn/ui components for consistent design:
+- `button.tsx`, `card.tsx`, `dialog.tsx`, `input.tsx`, `table.tsx`, etc.
+- `theme-provider.tsx` - Dark/light theme support
+
+## Library Structure
+
+### Configuration (`/lib/config`)
+- `plans.ts` - Subscription plan definitions
+
+### Database (`/lib/drizzle`)
+- `client.ts` - Drizzle ORM database client
+- `schema.ts` - Complete database schema definitions
+
+### Integrations
+- `/lib/dodo-payments/` - Dodo Payments SDK client
+- `/lib/supabase/` - Supabase client (browser and server)
+
+## Supabase Functions
+
+### Edge Functions (`/supabase/functions`)
+- `dodo-webhook/` - Webhook handler for payment events
+  - Processes payment and subscription webhooks
+  - Updates database based on webhook events
+  - Manages user tier upgrades/downgrades
+
+## Key Files
+
+### Configuration
+- `drizzle.config.ts` - Drizzle ORM configuration
+- `next.config.ts` - Next.js configuration
+- `tsconfig.json` - TypeScript configuration
+- `tailwind.config.ts` - Tailwind CSS configuration
+- `components.json` - Shadcn/ui configuration
+
+### Package Management
+- `package.json` - Dependencies and scripts
+- `bun.lock` - Bun lockfile
+
+## Design Patterns
+
+### Server-First Architecture
+All data mutations use Next.js Server Actions (`"use server"`) for type-safe server-side operations without API routes.
+
+### Component Composition
+Components are organized by feature (auth, dashboard) with shared UI components in `/components/ui`.
+
+### Database Access Layer
+All database operations use Drizzle ORM with type-safe queries and schema definitions.
+
+### Client/Server Separation
+- Server components for data fetching
+- Client components (`"use client"`) for interactivity
+- Server actions for mutations
+
+## Environment Configuration
+
+Required environment variables (see `.env.example`):
+- Supabase credentials (URL, service role key)
+- Dodo Payments API key
+- Database connection string
+- Webhook secrets
+
+## Development Workflow
+
+1. **Database**: Schema defined in `/lib/drizzle/schema.ts`
+2. **Server Actions**: Business logic in `/actions`
+3. **Components**: UI in `/components`
+4. **Pages**: Routes in `/app`
+5. **Webhooks**: Event handling in `/supabase/functions`
+
+This structure ensures clear separation of concerns, type safety, and maintainability.

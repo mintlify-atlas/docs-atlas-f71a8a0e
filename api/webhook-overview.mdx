@@ -1,0 +1,135 @@
+---
+title: Webhook Overview
+description: Integration guide for Dodo Payments webhook system
+---
+
+The Dodo Supabase Subscription Starter kit includes a secure webhook handler that processes payment and subscription events from Dodo Payments.
+
+## Webhook Endpoint
+
+The webhook handler is deployed as a Supabase Edge Function at:
+
+```
+https://[your-project-ref].supabase.co/functions/v1/dodo-webhook
+```
+
+**Source:** `~/workspace/source/supabase/functions/dodo-webhook/index.ts`
+
+## Security & Verification
+
+All webhook requests are verified using the standardwebhooks library to ensure authenticity.
+
+### Verification Process
+
+The webhook handler validates every incoming request by:
+
+1. Extracting required headers from the request:
+   - `webhook-id`: Unique identifier for the webhook event
+   - `webhook-signature`: HMAC signature for verification
+   - `webhook-timestamp`: Timestamp of the event
+
+2. Verifying the signature using the `DODO_WEBHOOK_SECRET`:
+
+```typescript
+const webhook = new Webhook(dodoWebhookSecret);
+await webhook.verify(rawBody, webhookHeaders);
+```
+
+3. Rejecting requests with invalid signatures (returns 400 status)
+
+### Required Environment Variables
+
+<ParamField path="DODO_WEBHOOK_SECRET" type="string" required>
+  Secret key provided by Dodo Payments for webhook verification
+</ParamField>
+
+<ParamField path="SUPABASE_URL" type="string" required>
+  Your Supabase project URL
+</ParamField>
+
+<ParamField path="SUPABASE_SERVICE_ROLE_KEY" type="string" required>
+  Service role key for database access
+</ParamField>
+
+## Event Processing
+
+The webhook handler processes two categories of events:
+
+### Payment Events
+
+These events update the `payments` table:
+- `payment.succeeded`
+- `payment.failed`
+- `payment.processing`
+- `payment.cancelled`
+
+**Handler:** `managePayment()` function at line 120
+
+### Subscription Events
+
+These events update the `subscriptions` table and may also update user subscription status:
+
+**Active/Upgrade Events** (updates user tier):
+- `subscription.active`
+- `subscription.plan_changed`
+
+**Status Change Events**:
+- `subscription.renewed`
+- `subscription.on_hold`
+
+**Cancellation Events** (downgrades user):
+- `subscription.cancelled`
+- `subscription.expired`
+- `subscription.failed`
+
+**Handler:** `manageSubscription()` function at line 164
+
+## Response Codes
+
+<ResponseField name="200" type="Success">
+  Event processed successfully or event type not handled
+</ResponseField>
+
+<ResponseField name="400" type="Bad Request">
+  Invalid webhook signature - verification failed
+</ResponseField>
+
+<ResponseField name="405" type="Method Not Allowed">
+  Non-POST request received
+</ResponseField>
+
+<ResponseField name="500" type="Server Error">
+  Missing configuration or error processing webhook
+</ResponseField>
+
+## CORS Support
+
+The webhook endpoint includes CORS headers for cross-origin requests:
+
+```typescript
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
+};
+```
+
+## Database Operations
+
+The webhook handler uses upsert operations to handle both new events and updates:
+
+- **Payments:** Upserted by `payment_id`
+- **Subscriptions:** Upserted by `subscription_id`
+- **Users:** Updated by `dodo_customer_id`
+
+This ensures idempotency - replaying the same webhook event will not create duplicates.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Webhook Events" icon="bolt" href="/api/webhook-events">
+    View all webhook event types and payloads
+  </Card>
+  <Card title="Database Schema" icon="database" href="/api/schema-subscriptions">
+    Explore the database structure
+  </Card>
+</CardGroup>

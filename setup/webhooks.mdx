@@ -1,0 +1,373 @@
+---
+title: Webhook Deployment
+description: Deploy Dodo Payments webhook handlers to Supabase Functions
+---
+
+## Overview
+
+Webhooks are critical for keeping your database synchronized with Dodo Payments. When payments are processed or subscriptions change, Dodo Payments sends webhook events to your Supabase Function, which updates your database accordingly.
+
+## Prerequisites
+
+- Supabase project created (see [Supabase Setup](/setup/supabase))
+- Database schema deployed (see [Database Setup](/setup/database))
+- Supabase CLI installed (`npm install -g supabase` or `bun install -g supabase`)
+- `DODO_WEBHOOK_SECRET` from Dodo Payments dashboard
+
+## Webhook Function Overview
+
+The webhook function is located at:
+
+```
+supabase/functions/dodo-webhook/index.ts
+```
+
+### Function Architecture
+
+The webhook handler:
+
+1. **Verifies webhook signatures** using the `DODO_WEBHOOK_SECRET`
+2. **Processes webhook events** based on event type
+3. **Updates the database** with payment and subscription data
+4. **Manages user subscription tiers** based on subscription status
+
+### Handled Event Types
+
+#### Payment Events
+
+- `payment.succeeded` - Payment completed successfully
+- `payment.failed` - Payment attempt failed
+- `payment.processing` - Payment is being processed
+- `payment.cancelled` - Payment was cancelled
+
+#### Subscription Events
+
+- `subscription.active` - Subscription is now active (upgrades user tier)
+- `subscription.plan_changed` - Subscription plan was changed (updates user tier)
+- `subscription.renewed` - Subscription was renewed
+- `subscription.on_hold` - Subscription is temporarily on hold
+- `subscription.cancelled` - Subscription was cancelled (downgrades user)
+- `subscription.expired` - Subscription expired (downgrades user)
+- `subscription.failed` - Subscription payment failed (downgrades user)
+
+## Deploy the Webhook Function
+
+<Steps>
+  <Step title="Log in to Supabase CLI">
+    Authenticate with Supabase:
+
+    <CodeGroup>
+      ```bash npm
+      npx supabase login
+      ```
+
+      ```bash pnpm
+      pnpm supabase login
+      ```
+
+      ```bash bun
+      bunx supabase login
+      ```
+    </CodeGroup>
+
+    This will open a browser window for authentication.
+  </Step>
+
+  <Step title="Get your project reference ID">
+    Find your Supabase project reference in your project URL:
+
+    ```
+    https://[your-project-ref].supabase.co
+    ```
+
+    Copy the `[your-project-ref]` part.
+  </Step>
+
+  <Step title="Deploy the webhook function">
+    Run the deployment command:
+
+    <CodeGroup>
+      ```bash npm
+      npm run deploy:webhook -- --project-ref [your-project-ref]
+      ```
+
+      ```bash pnpm
+      pnpm run deploy:webhook --project-ref [your-project-ref]
+      ```
+
+      ```bash bun
+      bun run deploy:webhook --project-ref [your-project-ref]
+      ```
+    </CodeGroup>
+
+    Replace `[your-project-ref]` with your actual project reference.
+
+    <Note>
+      The `--no-verify-jwt` flag is included in the deployment script because webhook endpoints should be publicly accessible without JWT authentication. Security is handled through webhook signature verification instead.
+    </Note>
+  </Step>
+
+  <Step title="Set environment variables">
+    After deployment, configure the function's environment variables:
+
+    1. Go to your Supabase project dashboard
+    2. Navigate to **Edge Functions** → **dodo-webhook**
+    3. Click on **Settings**
+    4. Add the following secrets:
+       - `SUPABASE_URL`: Your Supabase project URL
+       - `SUPABASE_SERVICE_ROLE_KEY`: Your service role key
+       - `DODO_WEBHOOK_SECRET`: Your Dodo Payments webhook secret
+
+    Alternatively, use the Supabase CLI:
+
+    ```bash
+    supabase secrets set SUPABASE_URL=https://[your-project-ref].supabase.co --project-ref [your-project-ref]
+    supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key --project-ref [your-project-ref]
+    supabase secrets set DODO_WEBHOOK_SECRET=your-webhook-secret --project-ref [your-project-ref]
+    ```
+  </Step>
+
+  <Step title="Get your webhook URL">
+    Your deployed webhook URL will be:
+
+    ```
+    https://[your-project-ref].supabase.co/functions/v1/dodo-webhook
+    ```
+
+    Copy this URL - you'll need it to configure Dodo Payments.
+  </Step>
+</Steps>
+
+## Configure Dodo Payments Webhook
+
+<Steps>
+  <Step title="Navigate to webhook settings">
+    In your Dodo Payments dashboard, go to **Settings** → **Webhooks**.
+  </Step>
+
+  <Step title="Add webhook endpoint">
+    Click **Add Endpoint** and enter your webhook URL:
+
+    ```
+    https://[your-project-ref].supabase.co/functions/v1/dodo-webhook
+    ```
+  </Step>
+
+  <Step title="Select events">
+    Choose which events to send to your webhook. For full functionality, select:
+
+    **Payment Events:**
+    - payment.succeeded
+    - payment.failed
+    - payment.processing
+    - payment.cancelled
+
+    **Subscription Events:**
+    - subscription.active
+    - subscription.plan_changed
+    - subscription.renewed
+    - subscription.on_hold
+    - subscription.cancelled
+    - subscription.expired
+    - subscription.failed
+
+    <Note>
+      You can select "All events" to ensure you receive all current and future event types.
+    </Note>
+  </Step>
+
+  <Step title="Save configuration">
+    Click **Save** to activate the webhook.
+
+    Dodo Payments will now send events to your Supabase Function in real-time.
+  </Step>
+</Steps>
+
+## Webhook Function Code Structure
+
+### Main Handler
+
+The function uses Deno's `serve` API:
+
+```typescript
+Deno.serve(async (req) => {
+  // Handle OPTIONS for CORS
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Verify webhook signature
+  const webhook = new Webhook(dodoWebhookSecret);
+  await webhook.verify(rawBody, webhookHeaders);
+
+  // Process event based on type
+  switch (event.type) {
+    case "payment.succeeded":
+      await managePayment(event);
+      break;
+    case "subscription.active":
+      await manageSubscription(event);
+      await updateUserTier({...});
+      break;
+    // ... other event types
+  }
+});
+```
+
+### Key Functions
+
+#### managePayment()
+
+Upserts payment records to the `payments` table:
+
+```typescript
+async function managePayment(event: any) {
+  const data = {
+    payment_id: event.data.payment_id,
+    status: event.data.status,
+    total_amount: event.data.total_amount,
+    // ... other payment fields
+  };
+
+  await supabase.from("payments").upsert(data, {
+    onConflict: "payment_id",
+  });
+}
+```
+
+#### manageSubscription()
+
+Upserts subscription records to the `subscriptions` table:
+
+```typescript
+async function manageSubscription(event: any) {
+  const data = {
+    subscription_id: event.data.subscription_id,
+    status: event.data.status,
+    product_id: event.data.product_id,
+    // ... other subscription fields
+  };
+
+  await supabase.from("subscriptions").upsert(data, {
+    onConflict: "subscription_id",
+  });
+}
+```
+
+#### updateUserTier()
+
+Links active subscriptions to user accounts:
+
+```typescript
+async function updateUserTier(props: {
+  dodoCustomerId: string;
+  subscriptionId: string;
+}) {
+  await supabase
+    .from("users")
+    .update({ current_subscription_id: props.subscriptionId })
+    .eq("dodo_customer_id", props.dodoCustomerId);
+}
+```
+
+#### downgradeToHobbyPlan()
+
+Removes subscription when cancelled or expired:
+
+```typescript
+async function downgradeToHobbyPlan(props: { dodoCustomerId: string }) {
+  await supabase
+    .from("users")
+    .update({ current_subscription_id: null })
+    .eq("dodo_customer_id", props.dodoCustomerId);
+}
+```
+
+## Testing Your Webhook
+
+### Test in Dodo Payments Dashboard
+
+1. Go to **Settings** → **Webhooks**
+2. Find your webhook endpoint
+3. Click **Send test event**
+4. Select an event type (e.g., `payment.succeeded`)
+5. Click **Send**
+
+### Monitor Function Logs
+
+View real-time logs in Supabase:
+
+1. Go to **Edge Functions** → **dodo-webhook**
+2. Click on **Logs**
+3. You'll see incoming requests and any errors
+
+### Verify Database Updates
+
+After sending a test event, check your database:
+
+1. Go to **Database** → **Table Editor**
+2. Select the `payments` or `subscriptions` table
+3. Verify that test data appears
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Webhook signature verification failed">
+    **Cause**: The `DODO_WEBHOOK_SECRET` is incorrect or not set.
+
+    **Solution**: 
+    1. Verify the secret in Dodo Payments dashboard matches the one set in Supabase
+    2. Check that the secret is properly set in Edge Functions settings
+    3. Redeploy the function after updating secrets
+  </Accordion>
+
+  <Accordion title="Function returns 500 error">
+    **Cause**: Database connection or environment variable issues.
+
+    **Solution**:
+    1. Check that `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set correctly
+    2. Verify your database tables exist by running `db:push` again
+    3. Check function logs for specific error messages
+  </Accordion>
+
+  <Accordion title="Events received but database not updating">
+    **Cause**: Table structure mismatch or missing fields.
+
+    **Solution**:
+    1. Ensure your database schema matches the latest version
+    2. Run `bun run db:push` to sync schema changes
+    3. Check function logs for SQL errors
+  </Accordion>
+
+  <Accordion title="CORS errors in logs">
+    **Cause**: CORS headers not properly configured.
+
+    **Solution**: The function includes CORS headers, but if you're still seeing errors:
+    1. Ensure the OPTIONS handler is responding correctly
+    2. Check that `corsHeaders` includes your domain
+    3. Verify the request method is allowed
+  </Accordion>
+</AccordionGroup>
+
+## Security Considerations
+
+<Warning>
+  **Important security practices:**
+
+  - Always verify webhook signatures before processing events
+  - Never expose your `DODO_WEBHOOK_SECRET` in client-side code
+  - Use the `SUPABASE_SERVICE_ROLE_KEY` only in secure server environments
+  - Monitor webhook logs regularly for suspicious activity
+  - Implement rate limiting if you expect high webhook volume
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Run Development Server" icon="rocket" href="/quickstart#run-development-server">
+    Start your application and test the complete flow
+  </Card>
+  <Card title="Deploy to Production" icon="cloud" href="/deployment">
+    Deploy your application to Vercel or your preferred platform
+  </Card>
+</CardGroup>

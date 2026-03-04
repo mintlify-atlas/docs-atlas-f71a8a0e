@@ -1,0 +1,315 @@
+---
+title: 'deleteAccount'
+description: 'Permanently deletes the user account and marks data as deleted'
+---
+
+## Overview
+
+The `deleteAccount` function permanently deletes the user's Supabase authentication account and marks their database record as deleted with a soft delete timestamp. This is an irreversible operation.
+
+## Function Signature
+
+```typescript
+export async function deleteAccount(): ServerActionRes
+```
+
+## Parameters
+
+This function does not accept any parameters. It automatically deletes the authenticated user's account.
+
+## Return Value
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the operation was successful
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the operation failed:
+  - "User not found" - No authenticated session exists
+  - Specific error message from Supabase if deletion fails
+  - "An unknown error occurred" for unexpected errors
+</ResponseField>
+
+## Implementation Details
+
+The function performs the following operations:
+
+1. Retrieves the authenticated user via `getUser()`
+2. Calls the Supabase Admin API to permanently delete the authentication account
+3. Updates the user's database record with a `deletedAt` timestamp (soft delete)
+4. Returns success if both operations complete
+
+### Deletion Behavior
+
+- **Authentication**: User is permanently deleted from Supabase Auth
+- **Database**: User record is soft-deleted (marked with `deletedAt` timestamp)
+- **Sessions**: All user sessions are immediately invalidated
+- **Recovery**: Account cannot be recovered after deletion
+- **Subscription**: Does not automatically cancel active subscriptions (handle separately)
+
+## Error Handling
+
+- Returns `{ success: false, error: "User not found" }` if authentication fails
+- Returns `{ success: false, error: <message> }` with the actual Supabase error message
+- Returns `{ success: false, error: "An unknown error occurred" }` for unexpected errors
+- All exceptions are caught and converted to structured error responses
+
+## Usage Example
+
+```typescript
+import { deleteAccount } from '@/actions/delete-account';
+import { redirect } from 'next/navigation';
+
+export default async function DeleteAccountHandler() {
+  const result = await deleteAccount();
+
+  if (!result.success) {
+    return <div>Error deleting account: {result.error}</div>;
+  }
+
+  // User is deleted, redirect to homepage
+  redirect('/');
+}
+```
+
+## Client Component with Confirmation
+
+```typescript
+'use client';
+
+import { deleteAccount } from '@/actions/delete-account';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+export function DeleteAccountButton() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const router = useRouter();
+
+  const handleDelete = async () => {
+    const confirmed = confirm(
+      'Are you absolutely sure? This action cannot be undone. Your account and all data will be permanently deleted.'
+    );
+
+    if (!confirmed) return;
+
+    const secondConfirm = confirm(
+      'Last chance! Type "DELETE" in the next prompt to confirm.'
+    );
+
+    if (!secondConfirm) return;
+
+    const typed = prompt('Type DELETE to confirm:');
+    if (typed !== 'DELETE') {
+      alert('Account deletion cancelled.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const result = await deleteAccount();
+
+    if (result.success) {
+      alert('Your account has been deleted.');
+      router.push('/');
+    } else {
+      setError(result.error);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      {error && <div className="text-red-600 mb-2">{error}</div>}
+      <button
+        onClick={handleDelete}
+        disabled={loading}
+        className="bg-red-600 text-white px-4 py-2 rounded"
+      >
+        {loading ? 'Deleting...' : 'Delete Account'}
+      </button>
+    </div>
+  );
+}
+```
+
+## Complete Account Deletion Flow
+
+```typescript
+import { deleteAccount } from '@/actions/delete-account';
+import { cancelSubscription } from '@/actions/cancel-subscription';
+import { getUserSubscription } from '@/actions/get-user-subscription';
+import { redirect } from 'next/navigation';
+
+export default async function DeleteAccountPage() {
+  async function handleDelete() {
+    'use server';
+
+    // First, check for active subscription
+    const subResult = await getUserSubscription();
+    
+    if (subResult.success && subResult.data.subscription) {
+      const subscription = subResult.data.subscription;
+      
+      // Cancel subscription first if active
+      if (subscription.status === 'active' && !subscription.cancelAtNextBillingDate) {
+        await cancelSubscription({
+          subscriptionId: subscription.subscriptionId
+        });
+      }
+    }
+
+    // Then delete account
+    const result = await deleteAccount();
+
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+
+    // Redirect to homepage
+    redirect('/');
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-4">Delete Account</h1>
+      
+      <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+        <h2 className="font-bold text-red-800">Warning</h2>
+        <p className="text-red-700">
+          This action is permanent and cannot be undone. All your data will be deleted.
+        </p>
+      </div>
+
+      <div className="mb-6">
+        <h3 className="font-bold mb-2">What will be deleted:</h3>
+        <ul className="list-disc list-inside space-y-1 text-gray-700">
+          <li>Your account and authentication credentials</li>
+          <li>Your user profile and settings</li>
+          <li>Your subscription (will be cancelled)</li>
+          <li>All associated data</li>
+        </ul>
+      </div>
+
+      <form action={handleDelete}>
+        <button
+          type="submit"
+          className="bg-red-600 text-white px-6 py-2 rounded font-semibold"
+        >
+          Delete My Account
+        </button>
+      </form>
+    </div>
+  );
+}
+```
+
+## Multi-Step Deletion with Feedback
+
+```typescript
+'use client';
+
+import { deleteAccount } from '@/actions/delete-account';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+
+export function AccountDeletionFlow() {
+  const [step, setStep] = useState(1); // 1: confirm, 2: feedback, 3: final confirm
+  const [reason, setReason] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  const handleDelete = async () => {
+    if (confirmation !== 'DELETE') {
+      alert('Please type DELETE to confirm');
+      return;
+    }
+
+    setLoading(true);
+
+    // Submit feedback (implement your own feedback endpoint)
+    if (reason) {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify({ reason, type: 'account_deletion' })
+      });
+    }
+
+    // Delete account
+    const result = await deleteAccount();
+
+    if (result.success) {
+      alert('Your account has been deleted.');
+      router.push('/');
+    } else {
+      alert(`Error: ${result.error}`);
+      setLoading(false);
+    }
+  };
+
+  if (step === 1) {
+    return (
+      <div>
+        <h2>Are you sure you want to delete your account?</h2>
+        <p>This action cannot be undone.</p>
+        <button onClick={() => setStep(2)}>Continue</button>
+        <button onClick={() => router.back()}>Cancel</button>
+      </div>
+    );
+  }
+
+  if (step === 2) {
+    return (
+      <div>
+        <h2>We're sorry to see you go</h2>
+        <p>Would you mind telling us why you're deleting your account?</p>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Your feedback helps us improve..."
+          rows={4}
+        />
+        <button onClick={() => setStep(3)}>Continue</button>
+        <button onClick={() => setStep(1)}>Back</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2>Final Confirmation</h2>
+      <p>Type <strong>DELETE</strong> to confirm account deletion:</p>
+      <input
+        type="text"
+        value={confirmation}
+        onChange={(e) => setConfirmation(e.target.value)}
+        placeholder="Type DELETE"
+      />
+      <button onClick={handleDelete} disabled={loading || confirmation !== 'DELETE'}>
+        {loading ? 'Deleting...' : 'Delete Account Permanently'}
+      </button>
+      <button onClick={() => setStep(2)} disabled={loading}>Back</button>
+    </div>
+  );
+}
+```
+
+## Important Considerations
+
+- This function does **not** automatically cancel active subscriptions. Cancel subscriptions separately if needed.
+- The function uses soft delete in the database (sets `deletedAt`) but hard deletes from Supabase Auth.
+- All user sessions are immediately invalidated.
+- Consider implementing a grace period or account recovery mechanism if needed.
+- Ensure you handle subscription cancellation before account deletion to avoid billing issues.
+
+## Related Actions
+
+- [`getUser`](/api/get-user) - Retrieves the authenticated user
+- [`cancelSubscription`](/api/cancel-subscription) - Cancels active subscription
+- [`getUserSubscription`](/api/get-user-subscription) - Gets subscription status
+
+## Source Code
+
+Location: `actions/delete-account.ts:10`

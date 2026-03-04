@@ -1,0 +1,547 @@
+---
+title: Payments Table Schema
+description: Database schema reference for the payments table
+---
+
+The `payments` table stores all payment transaction records from Dodo Payments, including payment details, card information, and complete webhook data.
+
+**Source:** `~/workspace/source/lib/drizzle/schema.ts:71-108`
+
+## Table Definition
+
+```typescript
+export const payments = pgTable("payments", {
+  paymentId: text("payment_id").primaryKey(),
+  status: text("status").notNull(),
+  totalAmount: real("total_amount").notNull(),
+  currency: text("currency").notNull(),
+  paymentMethod: text("payment_method"),
+  paymentMethodType: text("payment_method_type"),
+  customerId: text("customer_id").notNull(),
+  customerName: text("customer_name"),
+  customerEmail: text("customer_email").notNull(),
+  createdAt: timestamp("created_at", {
+    mode: "string",
+    withTimezone: true,
+  }).notNull(),
+  subscriptionId: text("subscription_id").notNull(),
+  brandId: text("brand_id").notNull(),
+  digitalProductDelivered: boolean("digital_product_delivered"),
+  metadata: jsonb("metadata"),
+  webhookData: jsonb("webhook_data").notNull(),
+  billing: jsonb("billing").notNull(),
+  businessId: text("business_id").notNull(),
+  cardIssuingCountry: text("card_issuing_country"),
+  cardLastFour: text("card_last_four"),
+  cardNetwork: text("card_network"),
+  cardType: text("card_type"),
+  discountId: text("discount_id"),
+  disputes: jsonb("disputes"),
+  errorCode: text("error_code"),
+  errorMessage: text("error_message"),
+  paymentLink: text("payment_link"),
+  productCart: jsonb("product_cart"),
+  refunds: jsonb("refunds"),
+  settlementAmount: real("settlement_amount"),
+  settlementCurrency: text("settlement_currency"),
+  settlementTax: real("settlement_tax"),
+  tax: real("tax"),
+  updatedAt: timestamp("updated_at", { mode: "string", withTimezone: true }),
+});
+```
+
+## Core Fields
+
+<ResponseField name="payment_id" type="text" required>
+  **Primary Key**
+  
+  Unique identifier for the payment from Dodo Payments.
+  
+  Used for upsert operations in webhook handlers.
+</ResponseField>
+
+<ResponseField name="status" type="text" required>
+  Current status of the payment.
+  
+  **Possible values:**
+  - `succeeded` - Payment completed successfully
+  - `failed` - Payment failed
+  - `processing` - Payment is being processed
+  - `cancelled` - Payment was cancelled
+  
+  Updated by webhook events:
+  - `payment.succeeded`
+  - `payment.failed`
+  - `payment.processing`
+  - `payment.cancelled`
+</ResponseField>
+
+<ResponseField name="total_amount" type="real" required>
+  Total payment amount including tax.
+  
+  Stored as a floating-point number.
+</ResponseField>
+
+<ResponseField name="currency" type="text" required>
+  Three-letter ISO currency code (e.g., "USD", "EUR", "GBP").
+</ResponseField>
+
+## Payment Method Fields
+
+<ResponseField name="payment_method" type="text">
+  **Nullable**
+  
+  Payment method identifier from Dodo Payments.
+</ResponseField>
+
+<ResponseField name="payment_method_type" type="text">
+  **Nullable**
+  
+  Type of payment method (e.g., "card", "bank_transfer").
+</ResponseField>
+
+<ResponseField name="card_last_four" type="text">
+  **Nullable**
+  
+  Last four digits of the card number.
+  
+  Only populated for card payments.
+</ResponseField>
+
+<ResponseField name="card_network" type="text">
+  **Nullable**
+  
+  Card network (e.g., "Visa", "Mastercard", "American Express").
+</ResponseField>
+
+<ResponseField name="card_type" type="text">
+  **Nullable**
+  
+  Card type (e.g., "credit", "debit", "prepaid").
+</ResponseField>
+
+<ResponseField name="card_issuing_country" type="text">
+  **Nullable**
+  
+  ISO country code of the card issuing bank.
+</ResponseField>
+
+## Customer Fields
+
+<ResponseField name="customer_id" type="text" required>
+  Dodo Payments customer identifier.
+  
+  Corresponds to `dodo_customer_id` in the users table.
+</ResponseField>
+
+<ResponseField name="customer_email" type="text" required>
+  Customer email address.
+</ResponseField>
+
+<ResponseField name="customer_name" type="text">
+  **Nullable**
+  
+  Customer full name.
+</ResponseField>
+
+## Subscription & Product Fields
+
+<ResponseField name="subscription_id" type="text" required>
+  Associated subscription identifier.
+  
+  Links payment to subscription in the `subscriptions` table.
+</ResponseField>
+
+<ResponseField name="product_cart" type="jsonb">
+  **Nullable**
+  
+  Product cart details including items purchased.
+</ResponseField>
+
+<ResponseField name="digital_product_delivered" type="boolean">
+  **Nullable**
+  
+  Whether digital products have been delivered.
+</ResponseField>
+
+## Business Fields
+
+<ResponseField name="brand_id" type="text" required>
+  Brand identifier from Dodo Payments.
+</ResponseField>
+
+<ResponseField name="business_id" type="text" required>
+  Business identifier from Dodo Payments.
+</ResponseField>
+
+## Financial Fields
+
+<ResponseField name="tax" type="real">
+  **Nullable**
+  
+  Tax amount in payment currency.
+</ResponseField>
+
+<ResponseField name="settlement_amount" type="real">
+  **Nullable**
+  
+  Amount you receive after fees in settlement currency.
+</ResponseField>
+
+<ResponseField name="settlement_currency" type="text">
+  **Nullable**
+  
+  Currency code for settlement (may differ from payment currency).
+</ResponseField>
+
+<ResponseField name="settlement_tax" type="real">
+  **Nullable**
+  
+  Tax amount in settlement currency.
+</ResponseField>
+
+## Optional Fields
+
+<ResponseField name="billing" type="jsonb" required>
+  Billing information object.
+  
+  Contains billing address and contact details.
+</ResponseField>
+
+<ResponseField name="metadata" type="jsonb">
+  **Nullable**
+  
+  Custom metadata object from Dodo Payments.
+  
+  Use for storing custom attributes and tracking information.
+</ResponseField>
+
+<ResponseField name="discount_id" type="text">
+  **Nullable**
+  
+  Applied discount identifier.
+  
+  Links to discount/coupon in Dodo Payments.
+</ResponseField>
+
+<ResponseField name="payment_link" type="text">
+  **Nullable**
+  
+  URL for the payment link if payment was created via link.
+</ResponseField>
+
+<ResponseField name="webhook_data" type="jsonb" required>
+  Complete webhook event data.
+  
+  Stores the entire webhook payload for reference and debugging.
+  
+  **Source:** supabase/functions/dodo-webhook/index.ts:135
+</ResponseField>
+
+## Error Fields
+
+<ResponseField name="error_code" type="text">
+  **Nullable**
+  
+  Error code for failed payments.
+  
+  Populated when `status` is "failed".
+</ResponseField>
+
+<ResponseField name="error_message" type="text">
+  **Nullable**
+  
+  Human-readable error message for failed payments.
+</ResponseField>
+
+## Refunds & Disputes
+
+<ResponseField name="refunds" type="jsonb">
+  **Nullable**
+  
+  Refund information object.
+  
+  Contains refund history and details if payment has been refunded.
+</ResponseField>
+
+<ResponseField name="disputes" type="jsonb">
+  **Nullable**
+  
+  Dispute information object.
+  
+  Contains chargeback and dispute details if applicable.
+</ResponseField>
+
+## Timestamps
+
+<ResponseField name="created_at" type="timestamp" required>
+  **With timezone**
+  
+  ISO 8601 timestamp when payment was created.
+</ResponseField>
+
+<ResponseField name="updated_at" type="timestamp">
+  **Nullable, With timezone**
+  
+  ISO 8601 timestamp when payment was last updated.
+</ResponseField>
+
+## TypeScript Types
+
+**Defined at:** lib/drizzle/schema.ts:132-133
+
+```typescript
+export type SelectPayment = typeof payments.$inferSelect;
+export type InsertPayment = typeof payments.$inferInsert;
+```
+
+### SelectPayment
+
+Type for reading payment records from the database.
+
+```typescript
+type SelectPayment = {
+  paymentId: string;
+  status: string;
+  totalAmount: number;
+  currency: string;
+  paymentMethod: string | null;
+  paymentMethodType: string | null;
+  customerId: string;
+  customerName: string | null;
+  customerEmail: string;
+  createdAt: string;
+  subscriptionId: string;
+  brandId: string;
+  digitalProductDelivered: boolean | null;
+  metadata: unknown | null;
+  webhookData: unknown;
+  billing: unknown;
+  businessId: string;
+  cardIssuingCountry: string | null;
+  cardLastFour: string | null;
+  cardNetwork: string | null;
+  cardType: string | null;
+  discountId: string | null;
+  disputes: unknown | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  paymentLink: string | null;
+  productCart: unknown | null;
+  refunds: unknown | null;
+  settlementAmount: number | null;
+  settlementCurrency: string | null;
+  settlementTax: number | null;
+  tax: number | null;
+  updatedAt: string | null;
+}
+```
+
+### InsertPayment
+
+Type for inserting new payment records.
+
+```typescript
+type InsertPayment = {
+  paymentId: string;
+  status: string;
+  totalAmount: number;
+  currency: string;
+  paymentMethod?: string | null;
+  paymentMethodType?: string | null;
+  customerId: string;
+  customerName?: string | null;
+  customerEmail: string;
+  createdAt: string;
+  subscriptionId: string;
+  brandId: string;
+  digitalProductDelivered?: boolean | null;
+  metadata?: unknown | null;
+  webhookData: unknown;
+  billing: unknown;
+  businessId: string;
+  cardIssuingCountry?: string | null;
+  cardLastFour?: string | null;
+  cardNetwork?: string | null;
+  cardType?: string | null;
+  discountId?: string | null;
+  disputes?: unknown | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  paymentLink?: string | null;
+  productCart?: unknown | null;
+  refunds?: unknown | null;
+  settlementAmount?: number | null;
+  settlementCurrency?: string | null;
+  settlementTax?: number | null;
+  tax?: number | null;
+  updatedAt?: string | null;
+}
+```
+
+## Usage in Webhook Handlers
+
+### Upserting Payment Data
+
+**Source:** supabase/functions/dodo-webhook/index.ts:120-162
+
+```typescript
+async function managePayment(event: any) {
+  const data = {
+    payment_id: event.data.payment_id,
+    brand_id: event.data.brand_id,
+    created_at: event.data.created_at,
+    currency: event.data.currency,
+    metadata: event.data.metadata,
+    payment_method: event.data.payment_method,
+    payment_method_type: event.data.payment_method_type,
+    status: event.data.status,
+    subscription_id: event.data.subscription_id,
+    total_amount: event.data.total_amount,
+    customer_email: event.data.customer.email,
+    customer_name: event.data.customer.name,
+    customer_id: event.data.customer.customer_id,
+    webhook_data: event,
+    billing: event.data.billing,
+    business_id: event.data.business_id,
+    card_issuing_country: event.data.card_issuing_country,
+    card_last_four: event.data.card_last_four,
+    card_network: event.data.card_network,
+    card_type: event.data.card_type,
+    discount_id: event.data.discount_id,
+    disputes: event.data.disputes,
+    error_code: event.data.error_code,
+    error_message: event.data.error_message,
+    payment_link: event.data.payment_link,
+    product_cart: event.data.product_cart,
+    refunds: event.data.refunds,
+    settlement_amount: event.data.settlement_amount,
+    settlement_currency: event.data.settlement_currency,
+    settlement_tax: event.data.settlement_tax,
+    tax: event.data.tax,
+    updated_at: event.data.updated_at,
+  };
+
+  const { error } = await supabase.from("payments").upsert(data, {
+    onConflict: "payment_id",
+  });
+
+  if (error) throw error;
+  console.log(`Payment ${data.payment_id} upserted successfully.`);
+}
+```
+
+Handled by webhook events:
+- `payment.succeeded`
+- `payment.failed`
+- `payment.processing`
+- `payment.cancelled`
+
+## Query Examples
+
+### Get Customer's Payment History
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { payments } from "@/lib/drizzle/schema";
+import { eq, desc } from "drizzle-orm";
+
+const paymentHistory = await db
+  .select()
+  .from(payments)
+  .where(eq(payments.customerId, dodoCustomerId))
+  .orderBy(desc(payments.createdAt));
+```
+
+### Get Successful Payments for Subscription
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { payments } from "@/lib/drizzle/schema";
+import { eq, and } from "drizzle-orm";
+
+const successfulPayments = await db
+  .select()
+  .from(payments)
+  .where(
+    and(
+      eq(payments.subscriptionId, subscriptionId),
+      eq(payments.status, "succeeded")
+    )
+  );
+```
+
+### Get Failed Payments
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { payments } from "@/lib/drizzle/schema";
+import { eq } from "drizzle-orm";
+
+const failedPayments = await db
+  .select({
+    paymentId: payments.paymentId,
+    customerEmail: payments.customerEmail,
+    totalAmount: payments.totalAmount,
+    currency: payments.currency,
+    errorCode: payments.errorCode,
+    errorMessage: payments.errorMessage,
+    createdAt: payments.createdAt,
+  })
+  .from(payments)
+  .where(eq(payments.status, "failed"));
+```
+
+### Calculate Total Revenue
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { payments } from "@/lib/drizzle/schema";
+import { eq, sum } from "drizzle-orm";
+
+const [result] = await db
+  .select({
+    total: sum(payments.totalAmount),
+  })
+  .from(payments)
+  .where(eq(payments.status, "succeeded"));
+
+const totalRevenue = result?.total || 0;
+```
+
+### Get Payments with Disputes
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { payments } from "@/lib/drizzle/schema";
+import { isNotNull } from "drizzle-orm";
+
+const disputedPayments = await db
+  .select()
+  .from(payments)
+  .where(isNotNull(payments.disputes));
+```
+
+### Get Refunded Payments
+
+```typescript
+import { db } from "@/lib/drizzle/db";
+import { payments } from "@/lib/drizzle/schema";
+import { isNotNull } from "drizzle-orm";
+
+const refundedPayments = await db
+  .select()
+  .from(payments)
+  .where(isNotNull(payments.refunds));
+```
+
+## Related Tables
+
+<CardGroup cols={2}>
+  <Card title="Users Schema" icon="user" href="/api/schema-users">
+    View the users table schema
+  </Card>
+  <Card title="Subscriptions Schema" icon="repeat" href="/api/schema-subscriptions">
+    View the subscriptions table schema
+  </Card>
+</CardGroup>

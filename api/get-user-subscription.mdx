@@ -1,0 +1,237 @@
+---
+title: getUserSubscription
+description: Retrieves the user's subscription and account details
+---
+
+## Overview
+
+The `getUserSubscription` function retrieves the currently authenticated user's subscription information along with their user record. It returns both the subscription data (if one exists) and the user details.
+
+## Function Signature
+
+```typescript
+export async function getUserSubscription(): ServerActionRes<UserSubscription>
+
+type UserSubscription = {
+  subscription: SelectSubscription | null;
+  user: SelectUser;
+}
+```
+
+## Parameters
+
+This function does not accept any parameters. It automatically retrieves the authenticated user from the session.
+
+## Return Value
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the operation was successful
+</ResponseField>
+
+<ResponseField name="data" type="UserSubscription">
+  An object containing both user and subscription data:
+  
+  <ResponseField name="user" type="SelectUser" required>
+    The user's database record:
+    
+    <ResponseField name="supabaseUserId" type="string">
+      The Supabase authentication user ID
+    </ResponseField>
+    
+    <ResponseField name="dodoCustomerId" type="string">
+      The Dodo Payments customer ID
+    </ResponseField>
+    
+    <ResponseField name="currentSubscriptionId" type="string | null">
+      The ID of the current active subscription
+    </ResponseField>
+    
+    <ResponseField name="createdAt" type="string">
+      ISO timestamp when the user was created
+    </ResponseField>
+    
+    <ResponseField name="updatedAt" type="string">
+      ISO timestamp when the user was last updated
+    </ResponseField>
+    
+    <ResponseField name="deletedAt" type="string | null">
+      ISO timestamp when the user was deleted (soft delete)
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="subscription" type="SelectSubscription | null">
+    The user's current subscription, or null if no subscription exists:
+    
+    <ResponseField name="subscriptionId" type="string">
+      Unique subscription identifier
+    </ResponseField>
+    
+    <ResponseField name="userId" type="string">
+      Reference to the user's Supabase ID
+    </ResponseField>
+    
+    <ResponseField name="productId" type="string">
+      The subscribed product ID
+    </ResponseField>
+    
+    <ResponseField name="status" type="string">
+      Subscription status (e.g., "active", "cancelled", "past_due")
+    </ResponseField>
+    
+    <ResponseField name="recurringPreTaxAmount" type="number">
+      Recurring amount before tax
+    </ResponseField>
+    
+    <ResponseField name="currency" type="string">
+      Currency code (e.g., "USD", "EUR")
+    </ResponseField>
+    
+    <ResponseField name="quantity" type="number">
+      Number of units subscribed
+    </ResponseField>
+    
+    <ResponseField name="nextBillingDate" type="string">
+      ISO timestamp of the next billing date
+    </ResponseField>
+    
+    <ResponseField name="previousBillingDate" type="string">
+      ISO timestamp of the previous billing date
+    </ResponseField>
+    
+    <ResponseField name="cancelAtNextBillingDate" type="boolean | null">
+      Whether the subscription will cancel at the next billing date
+    </ResponseField>
+    
+    <ResponseField name="cancelledAt" type="string | null">
+      ISO timestamp when subscription was cancelled
+    </ResponseField>
+    
+    And other subscription fields...
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the operation failed:
+  - "User not found" - No authenticated session
+  - "User details not found" - User exists in Supabase but not in database
+</ResponseField>
+
+## Implementation Details
+
+The function:
+
+1. Retrieves the authenticated Supabase user via `getUser()`
+2. Queries the database for the user's record using their Supabase ID
+3. If no subscription ID exists, returns user with `subscription: null`
+4. If subscription ID exists, queries for the subscription details
+5. Returns both user and subscription data together
+
+## Error Handling
+
+- Returns `{ success: false, error: "User not found" }` if authentication fails
+- Returns `{ success: false, error: "User details not found" }` if user record doesn't exist in database
+- Returns subscription as `null` if user has no active subscription (not an error)
+
+## Usage Example
+
+```typescript
+import { getUserSubscription } from '@/actions/get-user-subscription';
+
+export default async function AccountPage() {
+  const result = await getUserSubscription();
+
+  if (!result.success) {
+    return <div>Error: {result.error}</div>;
+  }
+
+  const { user, subscription } = result.data;
+
+  return (
+    <div>
+      <h1>Account Details</h1>
+      <p>Customer ID: {user.dodoCustomerId}</p>
+      
+      {subscription ? (
+        <div>
+          <h2>Active Subscription</h2>
+          <p>Status: {subscription.status}</p>
+          <p>Amount: {subscription.recurringPreTaxAmount} {subscription.currency}</p>
+          <p>Next Billing: {new Date(subscription.nextBillingDate).toLocaleDateString()}</p>
+          {subscription.cancelAtNextBillingDate && (
+            <p className="text-red-600">Cancels on {new Date(subscription.nextBillingDate).toLocaleDateString()}</p>
+          )}
+        </div>
+      ) : (
+        <p>No active subscription</p>
+      )}
+    </div>
+  );
+}
+```
+
+## Checking Subscription Status
+
+```typescript
+import { getUserSubscription } from '@/actions/get-user-subscription';
+
+export async function hasActiveSubscription(): Promise<boolean> {
+  const result = await getUserSubscription();
+  
+  if (!result.success || !result.data.subscription) {
+    return false;
+  }
+  
+  return result.data.subscription.status === 'active';
+}
+```
+
+## Client Component Example
+
+```typescript
+'use client';
+
+import { getUserSubscription } from '@/actions/get-user-subscription';
+import { useEffect, useState } from 'react';
+
+export function SubscriptionStatus() {
+  const [subscription, setSubscription] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getUserSubscription().then(result => {
+      if (result.success) {
+        setSubscription(result.data.subscription);
+      }
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
+  
+  if (!subscription) {
+    return <div>No active subscription. <a href="/pricing">View Plans</a></div>;
+  }
+
+  return (
+    <div>
+      <div>Status: {subscription.status}</div>
+      <div>Next billing: {new Date(subscription.nextBillingDate).toLocaleDateString()}</div>
+      {subscription.cancelAtNextBillingDate && (
+        <div className="text-red-600">Subscription will cancel on next billing date</div>
+      )}
+    </div>
+  );
+}
+```
+
+## Related Actions
+
+- [`getUser`](/api/get-user) - Retrieves the authenticated user
+- [`getInvoices`](/api/get-invoices) - Retrieves user's payment history
+- [`changePlan`](/api/change-plan) - Changes the subscription plan
+- [`cancelSubscription`](/api/cancel-subscription) - Cancels the subscription
+- [`restoreSubscription`](/api/restore-subscription) - Restores a cancelled subscription
+
+## Source Code
+
+Location: `actions/get-user-subscription.ts:19`
